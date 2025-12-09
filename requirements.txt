@@ -3,3 +3,7 @@ python-dotenv
 PyYAML
 pytest
 pytest-cov
+openai
+google-genai
+tiktoken
+wikipedia
