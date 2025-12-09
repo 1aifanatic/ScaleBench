@@ -11,6 +11,7 @@ import pytest
 
 from models.base import GenerationInput, PricingInfo
 from models.openai_client import OpenAIClient
+from models.gemini_client import GeminiClient
 
 
 # Mark all tests in this file as integration tests
@@ -22,6 +23,13 @@ def skip_if_no_openai_key():
     """Skip test if OpenAI API key is not available."""
     if not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY not set")
+
+
+@pytest.fixture
+def skip_if_no_gemini_key():
+    """Skip test if Gemini API key is not available."""
+    if not os.getenv("GEMINI_API_KEY"):
+        pytest.skip("GEMINI_API_KEY not set")
 
 
 class TestOpenAIClientIntegration:
@@ -107,6 +115,101 @@ class TestOpenAIClientIntegration:
     def test_with_long_context(self, skip_if_no_openai_key):
         """Test handling long context."""
         client = OpenAIClient(model_name="gpt-4o-mini")
+        
+        long_context = "Context: " + ("word " * 1000)
+        inp = GenerationInput(
+            context=long_context,
+            user_prompt="What is the context about?",
+        )
+        output = client.generate(inp)
+        
+        assert output.text is not None
+        assert output.input_tokens > 1000  # Should count context tokens
+
+
+class TestGeminiClientIntegration:
+    """Integration tests for Gemini client with real API."""
+
+    def test_simple_generation(self, skip_if_no_gemini_key):
+        """Test basic text generation with Gemini."""
+        client = GeminiClient(model_name="gemini-2.5-flash")
+        
+        inp = GenerationInput(user_prompt="Say 'Hello, World!' and nothing else.")
+        output = client.generate(inp)
+        
+        assert output.text is not None
+        assert len(output.text) > 0
+        assert output.latency_ms > 0
+        assert output.input_tokens > 0
+        assert output.output_tokens > 0
+
+    def test_with_system_prompt(self, skip_if_no_gemini_key):
+        """Test generation with system instruction."""
+        client = GeminiClient(model_name="gemini-2.5-flash")
+        
+        inp = GenerationInput(
+            system_prompt="You are a helpful assistant that only responds in JSON.",
+            user_prompt='Return {"status": "ok"}',
+        )
+        output = client.generate(inp)
+        
+        assert output.text is not None
+        assert "ok" in output.text.lower() or "status" in output.text.lower()
+
+    def test_with_temperature(self, skip_if_no_gemini_key):
+        """Test generation with custom temperature."""
+        client = GeminiClient(model_name="gemini-2.5-flash")
+        
+        inp = GenerationInput(
+            user_prompt="Say 'test' and nothing else.",
+            temperature=1.0,  # Default for Gemini
+        )
+        output = client.generate(inp)
+        
+        assert output.text is not None
+        assert len(output.text) > 0
+
+    def test_with_max_tokens(self, skip_if_no_gemini_key):
+        """Test generation with max output tokens limit."""
+        client = GeminiClient(model_name="gemini-2.5-flash")
+        
+        inp = GenerationInput(
+            user_prompt="Write a long story.",
+            max_output_tokens=20,
+        )
+        output = client.generate(inp)
+        
+        assert output.text is not None
+        assert output.output_tokens <= 25  # Allow small buffer
+
+    def test_token_counting(self, skip_if_no_gemini_key):
+        """Test Gemini API token counting."""
+        client = GeminiClient(model_name="gemini-2.5-flash")
+        
+        text = "Hello, world!"
+        count = client.count_tokens(text)
+        
+        assert count > 0
+        assert count < 10  # Should be a few tokens
+
+    def test_with_pricing(self, skip_if_no_gemini_key):
+        """Test cost calculation with pricing configured."""
+        pricing = PricingInfo(
+            input_per_1k_tokens=0.000075,  # gemini-2.0-flash pricing (example)
+            output_per_1k_tokens=0.0003,
+        )
+        client = GeminiClient(model_name="gemini-2.5-flash", pricing=pricing)
+        
+        inp = GenerationInput(user_prompt="Say hello.")
+        output = client.generate(inp)
+        
+        assert output.cost_usd is not None
+        assert output.cost_usd > 0
+        assert output.cost_usd < 0.01  # Should be tiny cost
+
+    def test_with_long_context(self, skip_if_no_gemini_key):
+        """Test handling long context."""
+        client = GeminiClient(model_name="gemini-2.5-flash")
         
         long_context = "Context: " + ("word " * 1000)
         inp = GenerationInput(
