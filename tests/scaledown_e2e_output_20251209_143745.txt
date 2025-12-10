@@ -1,0 +1,120 @@
+ScaleDown End-to-End Test
+Timestamp: 2025-12-09T14:37:45.412835
+Base Model: OpenAI gpt-4o
+
+================================================================================
+TEST CONFIGURATION
+================================================================================
+
+Context length: 59880 characters
+Question: Who is Taylor's brother?
+
+================================================================================
+TEST 1: BASELINE (No Compression)
+================================================================================
+
+Creating OpenAI client without compression...
+
+Generating response...
+
+RESPONSE:
+Taylor Swift's younger brother is Austin Swift, who is an actor.
+
+METRICS:
+  Input tokens: 12920
+  Output tokens: 14
+  Total tokens: 12934
+  Latency: 955ms
+  Cost: $0.032440
+
+================================================================================
+TEST 2: SCALEDOWN (Auto Compression)
+================================================================================
+
+Creating ScaleDown client wrapping OpenAI...
+Compression rate: auto
+
+Compressing context and generating response...
+
+RESPONSE:
+Taylor Swift's younger brother is Austin Swift.
+
+METRICS:
+  Input tokens (compressed): 908
+  Output tokens: 9
+  Total tokens: 917
+  Total latency: 7814ms
+  Cost: $0.002393
+
+COMPRESSION DETAILS:
+  Original tokens: 12912
+  Compressed tokens: 908
+  Compression ratio: 7.03%
+  Compression latency: 5123ms
+  Generation latency: 2692ms
+  ScaleDown rate: auto
+  Base provider: openai
+  Base model: gpt-4o
+
+================================================================================
+TEST 3: SCALEDOWN (50% Compression)
+================================================================================
+
+Creating ScaleDown client with compression_rate=0.5...
+
+Compressing context and generating response...
+
+RESPONSE:
+Taylor Swift's brother is Austin Swift.
+
+METRICS:
+  Input tokens (compressed): 908
+  Output tokens: 8
+  Total latency: 5882ms
+  Cost: $0.002383
+
+COMPRESSION DETAILS:
+  Original tokens: 12912
+  Compressed tokens: 908
+  Compression ratio: 7.03%
+  Compression latency: 4965ms
+
+================================================================================
+COMPARISON SUMMARY
+================================================================================
+
+Baseline vs ScaleDown (auto):
+  Token savings: 12012 (93.0%)
+  Cost savings: $0.030048 (92.6%)
+  Latency difference: 6859ms
+
+Baseline vs ScaleDown (50%):
+  Token savings: 12012 (93.0%)
+  Cost savings: $0.030058 (92.7%)
+  Latency difference: 4927ms
+
+
+================================================================================
+VALIDATION CHECKS
+================================================================================
+
+✓ PASS: Baseline response generated
+✓ PASS: ScaleDown (auto) response generated
+✓ PASS: ScaleDown (50%) response generated
+✓ PASS: Compression reduced tokens (auto)
+✓ PASS: Compression reduced tokens (50%)
+✓ PASS: Compression ratio valid (auto)
+✓ PASS: Compression ratio valid (50%)
+✓ PASS: Pricing calculated (baseline)
+✓ PASS: Pricing calculated (ScaleDown auto)
+✓ PASS: Pricing calculated (ScaleDown 50%)
+✓ PASS: ScaleDown cheaper than baseline (auto)
+✓ PASS: ScaleDown cheaper than baseline (50%)
+
+================================================================================
+TEST RESULT
+================================================================================
+
+✓ ALL TESTS PASSED
+
+Test completed at: 2025-12-09T14:38:02.092290
