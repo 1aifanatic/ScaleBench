@@ -2,7 +2,7 @@
 
 This module provides a wrapper around any ModelClient that adds ScaleDown's
 context compression layer before generation. Key features:
-- Wraps any BaseModelClient (OpenAI, Gemini, etc.)
+- Wraps any ModelClient (OpenAI, Gemini, etc.)
 - Calls ScaleDown API to compress long contexts
 - Fallback to uncompressed baseline on errors
 - Captures compression metrics and metadata
@@ -67,6 +67,14 @@ class ScaleDownClient(ModelClient):
         )
         
         self.base_client = base_client
+        # Validate compression_rate
+        if not (
+            (isinstance(compression_rate, str) and compression_rate == "auto")
+            or (isinstance(compression_rate, float) and 0.0 <= compression_rate <= 1.0)
+        ):
+            raise ValueError(
+                f"compression_rate must be 'auto' or a float between 0 and 1, got {compression_rate!r}"
+            )
         self.compression_rate = compression_rate
         self.max_retries = max_retries
         self.retry_delay = retry_delay
@@ -255,7 +263,6 @@ class ScaleDownClient(ModelClient):
             
             except (KeyError, ValueError) as e:
                 logger.error(f"Invalid ScaleDown API response: {e}")
-                last_exception = e
                 return None
         
         return None

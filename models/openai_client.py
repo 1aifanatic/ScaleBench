@@ -128,9 +128,15 @@ class OpenAIClient(ModelClient):
                     time.sleep(delay)
                 else:
                     logger.error(f"API error after {self.max_retries} retries: {e}")
-        
+            except Exception as e:
+                # Unexpected exception: raise immediately
+                logger.error(f"Unexpected error in OpenAIClient.generate: {e}", exc_info=True)
+                raise
         # If all retries failed, raise the last exception
-        raise last_exception
+        if last_exception is not None:
+            raise last_exception
+        else:
+            raise RuntimeError("OpenAIClient.generate failed with an unexpected error and no exception was captured.")
 
     def count_tokens(self, text: str) -> int:
         """Count tokens in text using tiktoken.
