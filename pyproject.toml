@@ -1,0 +1,22 @@
+[project]
+name = "scaledown-benchmarking"
+version = "0.1.0"
+description = "Benchmarking framework for ScaleDown context compression"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "requests==2.32.5",
+    "python-dotenv==1.2.1",
+    "PyYAML==6.0.3",
+    "pytest==9.0.2",
+    "pytest-cov==7.0.0",
+    "openai==2.9.0",
+    "google-genai==1.54.0",
+    "tiktoken==0.12.0",
+    "wikipedia==1.4.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
