@@ -2,6 +2,7 @@
 import pytest
 
 from models.base import PricingInfo, GenerationInput, ModelOutput, ModelClient
+from core.config import ModelConfig, DatasetConfig, TaskConfig, ExperimentConfig
 
 
 class TestPricingInfo:
@@ -218,3 +219,47 @@ class TestModelClientInterface:
         client = DummyClient(model_name="test", pricing=pricing)
         cost = client._calculate_cost(1000, 500)
         assert cost == pytest.approx(0.002 + 0.003)  # 1k*0.002 + 0.5k*0.006
+
+
+class TestModelConfig:
+    """Tests for ModelConfig with ScaleDown support."""
+
+    def test_model_config_baseline(self):
+        """Test baseline model config."""
+        config = ModelConfig(name="openai:gpt-4", mode="baseline")
+        assert config.name == "openai:gpt-4"
+        assert config.mode == "baseline"
+        assert config.scaledown is None
+
+    def test_model_config_scaledown_auto(self):
+        """Test ScaleDown model config with auto rate."""
+        config = ModelConfig(
+            name="openai:gpt-4",
+            mode="scaledown",
+            scaledown={"rate": "auto"}
+        )
+        assert config.name == "openai:gpt-4"
+        assert config.mode == "scaledown"
+        assert config.scaledown["rate"] == "auto"
+
+    def test_model_config_scaledown_custom_rate(self):
+        """Test ScaleDown model config with custom rate."""
+        config = ModelConfig(
+            name="openai:gpt-4",
+            mode="scaledown",
+            scaledown={"rate": 0.5}
+        )
+        assert config.scaledown["rate"] == 0.5
+
+    def test_experiment_with_scaledown(self):
+        """Test full experiment config with ScaleDown."""
+        exp = ExperimentConfig(
+            id="test_scaledown",
+            model={"name": "openai:gpt-4", "mode": "scaledown", "scaledown": {"rate": "auto"}},
+            dataset={"name": "longbench:narrativeqa"},
+            task={"name": "longdoc_qa"},
+            metrics=["f1"]
+        )
+        assert exp.id == "test_scaledown"
+        assert exp.model.mode == "scaledown"
+        assert exp.model.scaledown["rate"] == "auto"

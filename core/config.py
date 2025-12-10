@@ -1,7 +1,7 @@
 """Configuration management: environment setup and experiment YAML parsing."""
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from dataclasses import dataclass
 
 import yaml
@@ -15,7 +15,8 @@ load_dotenv()
 class ModelConfig:
     """Model configuration."""
     name: str
-    mode: str = "baseline"  # 'baseline' or 'scaledown@rate'
+    mode: str = "baseline"  # 'baseline' or 'scaledown'
+    scaledown: Optional[dict] = None  # ScaleDown config (rate, etc.)
     
     def __post_init__(self):
         if not self.name:

@@ -16,6 +16,7 @@ from typing import Optional, Union
 import requests
 
 from models.base import GenerationInput, ModelOutput, ModelClient
+from settings import settings
 
 
 logger = logging.getLogger(__name__)
@@ -47,9 +48,8 @@ class ScaleDownClient(ModelClient):
     
     Environment Variables:
         SCALEDOWN_API_KEY: Required API key for ScaleDown
+        SCALEDOWN_API_URL: ScaleDown API endpoint (default: https://api.scaledown.xyz/compress/raw)
     """
-    
-    SCALEDOWN_API_URL = "https://api.scaledown.xyz/compress/raw"
     
     def __init__(
         self,
@@ -73,8 +73,10 @@ class ScaleDownClient(ModelClient):
         self.fallback_on_error = fallback_on_error
         self.provider = "scaledown"
         
-        # Get API key
-        self.scaledown_api_key = api_key or os.getenv("SCALEDOWN_API_KEY")
+        # Get API key and URL from settings or environment
+        self.scaledown_api_key = api_key or os.getenv("SCALEDOWN_API_KEY") or settings.SCALEDOWN_API_KEY
+        self.scaledown_api_url = os.getenv("SCALEDOWN_API_URL") or settings.SCALEDOWN_API_URL
+        
         if not self.scaledown_api_key:
             raise ValueError("SCALEDOWN_API_KEY environment variable not set")
         
@@ -194,7 +196,7 @@ class ScaleDownClient(ModelClient):
                 start_time = time.time()
                 
                 response = requests.post(
-                    self.SCALEDOWN_API_URL,
+                    self.scaledown_api_url,
                     json=payload,
                     headers=headers,
                     timeout=30,

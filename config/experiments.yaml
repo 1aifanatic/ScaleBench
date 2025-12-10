@@ -46,3 +46,20 @@ experiments:
     metrics:
       - f1
       - exact_match
+
+  - id: scaledown_auto_openai_longbench_narrativeqa
+    model:
+      name: openai:gpt-4-turbo
+      mode: scaledown
+      scaledown:
+        rate: auto
+    dataset:
+      name: longbench:narrativeqa
+      split: test
+      num_examples: 10
+      seed: 42
+    task:
+      name: longdoc_qa
+    metrics:
+      - f1
+      - rouge_l
