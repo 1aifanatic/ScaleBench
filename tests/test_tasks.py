@@ -1,6 +1,5 @@
 """Unit tests for tasks."""
 import pytest
-from tasks.base import Task
 from tasks.rag_task import RAGTask
 from dataset.base import Example
 

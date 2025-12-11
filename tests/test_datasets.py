@@ -1,6 +1,6 @@
 """Unit tests for dataset loaders."""
 import pytest
-from dataset.base import Example, Dataset
+from dataset.base import Example
 from dataset.hotpotqa import HotpotQADataset
 
 

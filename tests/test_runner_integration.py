@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from core.config import ExperimentConfig, ModelConfig, DatasetConfig, TaskConfig
 from evaluation.runner import run_experiment
 from evaluation.aggregation import aggregate_from_jsonl, save_summary_csv, save_summary_json
-from models.base import ModelOutput, GenerationInput
+from models.base import ModelOutput
 from dataset.base import Example
 
 

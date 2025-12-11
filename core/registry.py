@@ -1,5 +1,5 @@
 """Simple registries for models/datasets/tasks/metrics."""
-from typing import Dict, List, Callable, Any
+from typing import Dict, List, Callable
 from core.config import ModelConfig, DatasetConfig, TaskConfig
 
 # Import model clients

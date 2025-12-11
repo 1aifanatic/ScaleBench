@@ -109,8 +109,7 @@ def main():
                 results.append(aggregated)
                 
                 # Extract timestamp from filename (format: {exp_id}_{timestamp}.jsonl)
-                filename_parts = raw_jsonl.stem.replace(exp.id + "_", "", 1)
-                timestamp = filename_parts
+                timestamp = raw_jsonl.stem.rsplit("_", 1)[-1]
                 
                 summary_dir = Path("results/summaries")
                 save_summary_csv(aggregated, summary_dir / f"{exp.id}_{timestamp}_summary.csv")

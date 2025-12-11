@@ -7,7 +7,7 @@ Clean, modular, reproducible benchmarking framework to evaluate ScaleDown's cont
 This framework evaluates **accuracy**, **latency**, and **cost** when using ScaleDown compression vs. baseline LLMs on QA tasks with long contexts. Currently supports:
 
 - **Datasets**: HotpotQA (multi-hop QA)
-- **Models**: OpenAI (gpt-4o), Gemini (gemini-2.0-flash-exp)
+- **Models**: OpenAI , Gemini
 - **Metrics**: Exact Match, Token-level F1
 - **Tasks**: RAG-style QA with context compression
 

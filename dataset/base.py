@@ -1,6 +1,6 @@
 """Dataset interface."""
 from abc import ABC, abstractmethod
-from typing import Iterator, Dict, Any, Optional, List
+from typing import Iterator, Dict, Any, Optional
 
 
 class Example(Dict[str, Any]):
