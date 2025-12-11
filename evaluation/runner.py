@@ -70,7 +70,10 @@ def run_experiment(config: ExperimentConfig) -> Dict[str, Any]:
                 context=example.get("context", "")
             )
             output = model_client.generate(generation_input)
-            latency_ms = (time.time() - start_time) * 1000
+            # Prefer model's own latency_ms if available; fallback includes prompt construction
+            latency_ms = getattr(output, "latency_ms", None)
+            if latency_ms is None:
+                latency_ms = (time.time() - start_time) * 1000  # Includes prompt construction
             
             # Postprocess prediction
             prediction = task.postprocess(output.text)
