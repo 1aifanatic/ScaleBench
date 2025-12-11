@@ -36,8 +36,7 @@ Context:
 Question: {question}
 
 Instructions:
-- Provide a brief, direct answer using minimum words
-- Answer in a single line
+- Answer directly in just 1-3 words
 - Use only information from the context
 - Do not add explanations or extra information
 

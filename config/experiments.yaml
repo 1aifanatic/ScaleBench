@@ -2,64 +2,35 @@
 # Each experiment specifies model, dataset, task, and optional metrics.
 
 experiments:
-  - id: baseline_gemini_longbench_narrativeqa
+  # HotpotQA baseline and ScaleDown experiments
+  - id: hotpotqa_baseline_openai
     model:
-      name: gemini:2.0-flash
-      mode: baseline
-    dataset:
-      name: longbench:narrativeqa
-      split: test
-      num_examples: 10
-      seed: 42
-    task:
-      name: longdoc_qa
-    metrics:
-      - f1
-      - rouge_l
-
-  - id: baseline_openai_longbench_narrativeqa
-    model:
-      name: openai:gpt-4-turbo
-      mode: baseline
-    dataset:
-      name: longbench:narrativeqa
-      split: test
-      num_examples: 10
-      seed: 42
-    task:
-      name: longdoc_qa
-    metrics:
-      - f1
-      - rouge_l
-
-  - id: baseline_gemini_hotpotqa
-    model:
-      name: gemini:2.0-flash
+      name: openai:gpt-4o
       mode: baseline
     dataset:
       name: hotpotqa
-      split: test
-      num_examples: 5
+      split: validation
+      num_examples: 10
       seed: 42
     task:
-      name: rag_task
+      name: rag_qa
     metrics:
-      - f1
       - exact_match
+      - f1
 
-  - id: scaledown_auto_openai_longbench_narrativeqa
+  - id: hotpotqa_scaledown_openai
     model:
-      name: openai:gpt-4-turbo
+      name: openai:gpt-4o
       mode: scaledown
       scaledown:
         rate: auto
     dataset:
-      name: longbench:narrativeqa
-      split: test
+      name: hotpotqa
+      split: validation
       num_examples: 10
       seed: 42
     task:
-      name: longdoc_qa
+      name: rag_qa
     metrics:
+      - exact_match
       - f1
-      - rouge_l
