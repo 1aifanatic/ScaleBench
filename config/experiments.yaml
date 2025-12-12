@@ -3,32 +3,34 @@
 
 experiments:
   # HotpotQA baseline and ScaleDown experiments
-  - id: hotpotqa_baseline_openai
+  - id: hotpotqa_baseline_openai_fullwiki
     model:
       name: openai:gpt-4o
       mode: baseline
+      generation:
+        temperature: 0.3
+        top_p: 1.0
     dataset:
-      name: hotpotqa
+      name: hotpotqa:fullwiki
       split: validation
-      num_examples: 10
-      seed: 42
     task:
       name: rag_qa
     metrics:
       - exact_match
       - f1
 
-  - id: hotpotqa_scaledown_openai
+  - id: hotpotqa_scaledown_openai_fullwiki
     model:
       name: openai:gpt-4o
       mode: scaledown
       scaledown:
         rate: auto
+      generation:
+        temperature: 0.3
+        top_p: 1.0
     dataset:
-      name: hotpotqa
+      name: hotpotqa:fullwiki
       split: validation
-      num_examples: 10
-      seed: 42
     task:
       name: rag_qa
     metrics:
