@@ -65,9 +65,23 @@ def run_experiment(config: ExperimentConfig) -> Dict[str, Any]:
             # Use task to format the question with instructions
             task_prompt = task.build_prompt({"question": example.get("question", ""), "context": ""})
             
+            # Build generation kwargs from experiment config.model.generation if present
+            generation_kwargs = {}
+            gen_cfg = getattr(config.model, "generation", None) or {}
+            # Map config keys to GenerationInput fields
+            if "temperature" in gen_cfg and gen_cfg["temperature"] is not None:
+                generation_kwargs["temperature"] = gen_cfg["temperature"]
+            if "top_p" in gen_cfg and gen_cfg["top_p"] is not None:
+                generation_kwargs["top_p"] = gen_cfg["top_p"]
+            # Support both `max_tokens` (YAML-friendly) and `max_output_tokens` as synonyms
+            max_tokens_val = gen_cfg.get("max_tokens") if "max_tokens" in gen_cfg else gen_cfg.get("max_output_tokens")
+            if max_tokens_val is not None:
+                generation_kwargs["max_output_tokens"] = max_tokens_val
+
             generation_input = GenerationInput(
                 user_prompt=task_prompt,
-                context=example.get("context", "")
+                context=example.get("context", ""),
+                **generation_kwargs,
             )
             output = model_client.generate(generation_input)
             latency_ms = (time.time() - start_time) * 1000

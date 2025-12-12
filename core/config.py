@@ -17,6 +17,7 @@ class ModelConfig:
     name: str
     mode: str = "baseline"  # 'baseline' or 'scaledown'
     scaledown: Optional[dict] = None  # ScaleDown config (rate, etc.)
+    generation: Optional[dict] = None  # Optional generation params (temperature, top_p, max_tokens)
     
     def __post_init__(self):
         if not self.name:
