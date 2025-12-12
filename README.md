@@ -64,6 +64,7 @@ Edit `config/experiments.yaml` to customize:
 - **num_examples**: Number of samples per experiment (default: 10)
 - **model**: Change model name or compression rate
 - **metrics**: Add/remove evaluation metrics
+- **generation**: Optional model generation settings (under `model.generation`) — supported: `temperature`, `top_p`, `max_tokens` (forwarded to the model client)
 
 Example:
 ```yaml
@@ -76,7 +77,8 @@ Example:
   dataset:
     name: hotpotqa
     split: validation
-    num_examples: 50
+    num_examples: 50  # omit or set to `null` to use the full split (all rows)
+    # Note: `seed` is only used when `num_examples` is provided and smaller than the dataset size.
   task:
     name: rag_qa
   metrics:
