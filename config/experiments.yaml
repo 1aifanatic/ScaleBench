@@ -7,9 +7,6 @@ experiments:
     model:
       name: openai:gpt-4o
       mode: baseline
-      generation:
-        temperature: 0.3
-        top_p: 1.0
     dataset:
       name: hotpotqa:fullwiki
       split: validation
@@ -25,9 +22,6 @@ experiments:
       mode: scaledown
       scaledown:
         rate: auto
-      generation:
-        temperature: 0.3
-        top_p: 1.0
     dataset:
       name: hotpotqa:fullwiki
       split: validation
