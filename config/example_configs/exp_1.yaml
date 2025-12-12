@@ -1,0 +1,68 @@
+# Benchmark experiments configuration
+# Each experiment specifies model, dataset, task, and optional metrics.
+
+experiments:
+  # HotpotQA baseline and ScaleDown experiments
+  - id: hotpotqa_baseline_gemini
+    model:
+      name: gemini:gemini-2.5-flash
+      mode: baseline
+    dataset:
+      name: hotpotqa
+      split: validation
+      num_examples: 10
+      seed: 42
+    task:
+      name: rag_qa
+    metrics:
+      - exact_match
+      - f1
+
+  - id: hotpotqa_scaledown_gemini
+    model:
+      name: gemini:gemini-2.5-flash
+      mode: scaledown
+      scaledown:
+        rate: auto
+    dataset:
+      name: hotpotqa
+      split: validation
+      num_examples: 10
+      seed: 42
+    task:
+      name: rag_qa
+    metrics:
+      - exact_match
+      - f1
+
+  - id: hotpotqa_baseline_openai
+    model:
+      name: openai:gpt-4o-mini
+      mode: baseline
+    dataset:
+      name: hotpotqa
+      split: validation
+      num_examples: 10
+      seed: 42
+    task:
+      name: rag_qa
+    metrics:
+      - exact_match
+      - f1
+
+  - id: hotpotqa_scaledown_openai
+    model:
+      name: openai:gpt-4o-mini
+      mode: scaledown
+      scaledown:
+        rate: auto
+    dataset:
+      name: hotpotqa
+      split: validation
+      num_examples: 10
+      seed: 42
+    task:
+      name: rag_qa
+    metrics:
+      - exact_match
+      - f1
