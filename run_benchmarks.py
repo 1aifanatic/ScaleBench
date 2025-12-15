@@ -160,11 +160,18 @@ def _display_results_summary(results, failed_experiments):
         table.add_column("Metrics", style="yellow")
         table.add_column("Avg Latency (ms)", justify="right", style="magenta")
         table.add_column("Avg Tokens", justify="right", style="blue")
+        table.add_column("Avg Cost ($)", justify="right", style="green")
         
         for result in results:
             # Extract metric means from nested structure
             metrics_str = ", ".join([f"{k}={v['mean']:.2f}" for k, v in result["metrics"].items()])
             total_tokens = result["tokens"]["avg_input_tokens"] + result["tokens"]["avg_output_tokens"]
+            
+            # Format cost (handle None case)
+            if "cost" in result and result["cost"]:
+                cost_str = f"${result['cost']['mean_usd']:.4f}"
+            else:
+                cost_str = "N/A"
             
             table.add_row(
                 result["experiment_id"],
@@ -172,6 +179,7 @@ def _display_results_summary(results, failed_experiments):
                 metrics_str,
                 f"{result['latency_ms']['mean']:.1f}",
                 f"{total_tokens:.0f}",
+                cost_str,
             )
         
         console.print(table)

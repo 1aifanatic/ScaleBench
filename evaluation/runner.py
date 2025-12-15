@@ -113,6 +113,7 @@ def run_experiment(config: ExperimentConfig) -> Dict[str, Any]:
                 "input_tokens": output.input_tokens,
                 "output_tokens": output.output_tokens,
                 "latency_ms": latency_ms,
+                "cost_usd": output.cost_usd,
                 "metrics": example_metrics,
             }
             
@@ -166,6 +167,11 @@ def _aggregate_results(results: List[Dict[str, Any]], config: ExperimentConfig) 
     total_input_tokens = sum(r["input_tokens"] for r in results)
     total_output_tokens = sum(r["output_tokens"] for r in results)
     
+    # Aggregate cost (filter out None values)
+    costs = [r.get("cost_usd") for r in results if r.get("cost_usd") is not None]
+    total_cost = sum(costs) if costs else None
+    avg_cost = total_cost / n if costs else None
+    
     return {
         "experiment_id": config.id,
         "model": config.model.name,
@@ -175,4 +181,6 @@ def _aggregate_results(results: List[Dict[str, Any]], config: ExperimentConfig) 
         "avg_latency_ms": total_latency / n,
         "avg_input_tokens": total_input_tokens / n,
         "avg_output_tokens": total_output_tokens / n,
+        "total_cost_usd": total_cost,
+        "avg_cost_usd": avg_cost,
     }
