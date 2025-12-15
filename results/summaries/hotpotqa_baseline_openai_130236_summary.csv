@@ -1,0 +1,2 @@
+experiment_id,model,n_examples,exact_match_mean,exact_match_std,exact_match_p50,exact_match_p95,f1_mean,f1_std,f1_p50,f1_p95,avg_latency_ms,latency_p50,latency_p95,avg_input_tokens,avg_output_tokens,total_cost_usd,avg_cost_usd,cost_p95_usd,compression_ratio
+hotpotqa_baseline_openai_20251215_130236,openai:gpt-4o,10,0.7,0.48304589153964794,1.0,1.0,0.78,0.41579909678700466,1.0,1.0,1899.062705039978,1488.2088899612427,4533.556640148159,1320.6,2.7,0.033285,0.0033285,0.0044521249999999995,

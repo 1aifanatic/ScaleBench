@@ -18,6 +18,7 @@ class ModelConfig:
     mode: str = "baseline"  # 'baseline' or 'scaledown'
     scaledown: Optional[dict] = None  # ScaleDown config (rate, etc.)
     generation: Optional[dict] = None  # Optional generation params (temperature, top_p, max_tokens)
+    pricing: Optional[dict] = None  # Optional pricing override (input_per_1m_tokens, output_per_1m_tokens)
     
     def __post_init__(self):
         if not self.name:

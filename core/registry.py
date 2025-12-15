@@ -6,7 +6,7 @@ from core.config import ModelConfig, DatasetConfig, TaskConfig
 from models.openai_client import OpenAIClient
 from models.gemini_client import GeminiClient
 from models.scaledown_client import ScaleDownClient
-from models.base import ModelClient
+from models.base import ModelClient, PricingInfo, DEFAULT_MODEL_PRICING
 
 # Import datasets
 from dataset.hotpotqa import HotpotQADataset
@@ -67,11 +67,23 @@ def get_model_client(config: ModelConfig) -> ModelClient:
     
     client_class = MODEL_REGISTRY[provider]
     
-    # Instantiate base client with model name
+    # Determine pricing (priority: YAML config > defaults > None)
+    pricing = None
+    if config.pricing:
+        # User provided custom pricing in YAML
+        pricing = PricingInfo(
+            input_per_1m_tokens=config.pricing.get("input_per_1m_tokens"),
+            output_per_1m_tokens=config.pricing.get("output_per_1m_tokens"),
+        )
+    elif model_name and model_name in DEFAULT_MODEL_PRICING:
+        # Use default pricing for known model
+        pricing = DEFAULT_MODEL_PRICING[model_name]
+    
+    # Instantiate base client with model name and pricing
     if model_name:
-        base_client = client_class(model_name=model_name)
+        base_client = client_class(model_name=model_name, pricing=pricing)
     else:
-        base_client = client_class()
+        base_client = client_class(pricing=pricing)
     
     # Wrap with ScaleDown if mode is 'scaledown'
     if config.mode == "scaledown":
@@ -80,6 +92,7 @@ def get_model_client(config: ModelConfig) -> ModelClient:
         return ScaleDownClient(
             base_client=base_client,
             compression_rate=rate,
+            pricing=pricing,  # Pass pricing to ScaleDown wrapper
         )
     
     return base_client

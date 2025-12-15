@@ -45,6 +45,7 @@ class ScaleDownClient(ModelClient):
         max_retries: Maximum retry attempts for compression (default: 2)
         retry_delay: Initial delay for exponential backoff (default: 2.0s)
         fallback_on_error: Whether to fallback to uncompressed on errors (default: True)
+        pricing: Optional pricing override (if None, uses base_client.pricing)
     
     Environment Variables:
         SCALEDOWN_API_KEY: Required API key for ScaleDown
@@ -59,11 +60,12 @@ class ScaleDownClient(ModelClient):
         max_retries: int = 2,
         retry_delay: float = 2.0,
         fallback_on_error: bool = True,
+        pricing: Optional['PricingInfo'] = None,
     ):
-        # Initialize with base client's model name and pricing
+        # Initialize with base client's model name and pricing (allow override)
         super().__init__(
             model_name=base_client.model_name,
-            pricing=base_client.pricing,
+            pricing=pricing if pricing is not None else base_client.pricing,
         )
         
         self.base_client = base_client

@@ -63,6 +63,7 @@ python3 run_benchmarks.py --verbose
 Edit `config/experiments.yaml` to customize:
 - **num_examples**: Number of samples per experiment (default: 10)
 - **model**: Change model name or compression rate
+- **pricing**: Override default pricing (per 1M tokens)
 - **metrics**: Add/remove evaluation metrics
 - **generation**: Optional model generation settings (under `model.generation`) — supported: `temperature`, `top_p`, `max_tokens` (forwarded to the model client)
 
@@ -72,6 +73,9 @@ Example:
   model:
     name: openai:gpt-4o
     mode: scaledown  # or 'baseline'
+    pricing:  # Optional: override default pricing
+      input_per_1m_tokens: 2.50
+      output_per_1m_tokens: 10.00
     scaledown:
       rate: auto  # or 0.5 for 50% compression
   dataset:
@@ -85,6 +89,22 @@ Example:
     - exact_match
     - f1
 ```
+
+#### Default Model Pricing
+
+The framework includes default pricing (per 1M tokens) for common models:
+- **gpt-4o**: $2.50 input / $10.00 output
+- **gpt-4o-mini**: $0.15 input / $0.60 output
+- **gpt-4.1**: $2.00 input / $8.00 output
+- **gpt-4.1-mini**: $0.40 input / $1.60 output
+- **gpt-5-mini**: $0.25 input / $2.00 output
+- **gpt-5.2**: $1.75 input / $14.00 output
+- **gpt-5.2-pro**: $21.00 input / $168.00 output
+- **gemini-2.5-flash**: $0.30 input / $2.50 output
+- **gemini-2.5-flash-lite**: $0.10 input / $0.40 output
+- **gemini-2.5-pro**: $1.25 input / $10.00 output
+
+To use custom pricing, add the `pricing` field to your model config as shown above.
 
 ## Understanding Results
 
@@ -102,9 +122,12 @@ Each line contains:
   "input_tokens": 1250,
   "output_tokens": 8,
   "latency_ms": 1543.2,
+  "cost_usd": 0.003205,
   "metrics": {"exact_match": 1.0, "f1": 1.0}
 }
 ```
+
+**Note**: `cost_usd` will be `null` if pricing is not configured for the model.
 
 ### Summary Statistics (`results/summaries/`)
 
@@ -112,7 +135,7 @@ Two files per experiment:
 
 **CSV** (`{experiment_id}_{timestamp}_summary.csv`):
 - Flat format for easy comparison
-- Columns: experiment_id, model, n_examples, exact_match_mean, f1_mean, avg_latency_ms, avg_input_tokens, avg_output_tokens, compression_ratio
+- Columns: experiment_id, model, n_examples, exact_match_mean, f1_mean, avg_latency_ms, avg_input_tokens, avg_output_tokens, total_cost_usd, avg_cost_usd, cost_p95_usd, compression_ratio
 
 **JSON** (`{experiment_id}_{timestamp}_summary.json`):
 - Nested format with full statistics
@@ -128,9 +151,18 @@ Two files per experiment:
     "f1": {"mean": 0.59, "std": 0.42, "p50": 0.6, "p95": 1.0}
   },
   "latency_ms": {"mean": 1135.0, "std": 495.0, "p50": 1199.0, "p95": 1859.5},
-  "tokens": {"avg_input_tokens": 1327.6, "avg_output_tokens": 8.4}
+  "tokens": {"avg_input_tokens": 1327.6, "avg_output_tokens": 8.4},
+  "cost": {
+    "total_usd": 0.03356,
+    "mean_usd": 0.003356,
+    "std_usd": 0.000124,
+    "p50_usd": 0.003312,
+    "p95_usd": 0.003598
+  }
 }
 ```
+
+**Note**: The `cost` field will be omitted if pricing is not configured.
 
 ### Key Metrics Explained
 
@@ -139,6 +171,8 @@ Two files per experiment:
 - **avg_input_tokens**: Average input tokens sent to LLM (should be ~80-90% lower for ScaleDown)
 - **avg_output_tokens**: Average tokens in model responses
 - **avg_latency_ms**: Average end-to-end latency (includes compression time for ScaleDown)
+- **avg_cost_usd**: Average cost per example in USD (based on token usage and model pricing)
+- **total_cost_usd**: Total cost for all examples in the experiment
 - **compression_ratio**: For ScaleDown only - compressed/original token ratio
 
 ### Comparing Baseline vs ScaleDown
@@ -147,7 +181,7 @@ Look for:
 1. **Token reduction**: ScaleDown input tokens should be 80-90% lower
 2. **Accuracy preservation**: Exact match and F1 should be similar (±5-10%)
 3. **Latency trade-off**: ScaleDown adds compression overhead but may reduce generation time
-4. **Cost savings**: Calculated from token reduction (input tokens dominate cost)
+4. **Cost savings**: ScaleDown should significantly reduce costs due to lower input token usage
 
 ## Project Structure
 

@@ -65,7 +65,21 @@ def aggregate_from_jsonl(jsonl_path: Path) -> Dict[str, Any]:
         "avg_output_tokens": statistics.mean(output_tokens),
     }
     
-    return {
+    # Aggregate cost (filter out None values)
+    costs = [r.get("cost_usd") for r in results if r.get("cost_usd") is not None]
+    cost_stats = None
+    if costs:
+        cost_stats = {
+            "total_usd": sum(costs),
+            "mean_usd": statistics.mean(costs),
+            "std_usd": statistics.stdev(costs) if len(costs) > 1 else 0.0,
+            "min_usd": min(costs),
+            "max_usd": max(costs),
+            "p50_usd": statistics.median(costs),
+            "p95_usd": _percentile(costs, 95),
+        }
+    
+    aggregated = {
         "experiment_id": experiment_id,
         "model": model,
         "n_examples": n,
@@ -73,6 +87,11 @@ def aggregate_from_jsonl(jsonl_path: Path) -> Dict[str, Any]:
         "latency_ms": latency_stats,
         "tokens": token_stats,
     }
+    
+    if cost_stats:
+        aggregated["cost"] = cost_stats
+    
+    return aggregated
 
 
 def save_summary_csv(aggregated: Dict[str, Any], output_path: Path):
@@ -106,6 +125,16 @@ def save_summary_csv(aggregated: Dict[str, Any], output_path: Path):
     # Add token stats
     row["avg_input_tokens"] = aggregated["tokens"]["avg_input_tokens"]
     row["avg_output_tokens"] = aggregated["tokens"]["avg_output_tokens"]
+    
+    # Add cost stats (if available)
+    if "cost" in aggregated:
+        row["total_cost_usd"] = aggregated["cost"]["total_usd"]
+        row["avg_cost_usd"] = aggregated["cost"]["mean_usd"]
+        row["cost_p95_usd"] = aggregated["cost"]["p95_usd"]
+    else:
+        row["total_cost_usd"] = None
+        row["avg_cost_usd"] = None
+        row["cost_p95_usd"] = None
     
     # Compression ratio (if ScaleDown mode)
     # For now, leave as placeholder since we need baseline comparison

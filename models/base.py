@@ -8,8 +8,8 @@ from typing import Optional, Dict, Any, List
 class PricingInfo:
     """Pricing information for a model."""
     
-    input_per_1k_tokens: Optional[float] = None
-    output_per_1k_tokens: Optional[float] = None
+    input_per_1m_tokens: Optional[float] = None
+    output_per_1m_tokens: Optional[float] = None
     
     def calculate_cost(self, input_tokens: int, output_tokens: int) -> Optional[float]:
         """Calculate cost in USD based on token usage.
@@ -21,12 +21,31 @@ class PricingInfo:
         Returns:
             Cost in USD, or None if pricing not configured.
         """
-        if self.input_per_1k_tokens is None or self.output_per_1k_tokens is None:
+        if self.input_per_1m_tokens is None or self.output_per_1m_tokens is None:
             return None
         
-        input_cost = (input_tokens / 1000.0) * self.input_per_1k_tokens
-        output_cost = (output_tokens / 1000.0) * self.output_per_1k_tokens
+        input_cost = (input_tokens / 1_000_000.0) * self.input_per_1m_tokens
+        output_cost = (output_tokens / 1_000_000.0) * self.output_per_1m_tokens
         return input_cost + output_cost
+
+
+# Default pricing for common models (per 1M tokens)
+# Source: Provider pricing pages as of December 2025
+DEFAULT_MODEL_PRICING: Dict[str, PricingInfo] = {
+    # OpenAI models
+    "gpt-4o": PricingInfo(input_per_1m_tokens=2.50, output_per_1m_tokens=10.00),
+    "gpt-4o-mini": PricingInfo(input_per_1m_tokens=0.15, output_per_1m_tokens=0.60),
+    "gpt-4.1": PricingInfo(input_per_1m_tokens=2.00, output_per_1m_tokens=8.00),
+    "gpt-4.1-mini": PricingInfo(input_per_1m_tokens=0.40, output_per_1m_tokens=1.60),
+    "gpt-5-mini": PricingInfo(input_per_1m_tokens=0.25, output_per_1m_tokens=2.00),
+    "gpt-5.2": PricingInfo(input_per_1m_tokens=1.75, output_per_1m_tokens=14.00),
+    "gpt-5.2-pro": PricingInfo(input_per_1m_tokens=21.00, output_per_1m_tokens=168.00),
+    
+    # Gemini models
+    "gemini-2.5-flash": PricingInfo(input_per_1m_tokens=0.30, output_per_1m_tokens=2.50),
+    "gemini-2.5-flash-lite": PricingInfo(input_per_1m_tokens=0.10, output_per_1m_tokens=0.40),
+    "gemini-2.5-pro": PricingInfo(input_per_1m_tokens=1.25, output_per_1m_tokens=10.00),
+}
 
 
 @dataclass
