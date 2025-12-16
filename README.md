@@ -111,7 +111,7 @@ If `compression_model` is not specified, it defaults to `gemini-2.5-flash` (fast
     mode: scaledown
     scaledown:
       rate: auto
-      compression_model: gemini:2.5-flash  # Compression model (limited to supported models)
+      compression_model: gemini-2.5-flash  # Compression model (limited to supported models)
 ```
 
 #### Default Model Pricing
