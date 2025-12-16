@@ -89,9 +89,11 @@ def get_model_client(config: ModelConfig) -> ModelClient:
     if config.mode == "scaledown":
         scaledown_config = config.scaledown or {}
         rate = scaledown_config.get("rate", "auto")
+        compression_model = scaledown_config.get("compression_model")  # May be None
         return ScaleDownClient(
             base_client=base_client,
             compression_rate=rate,
+            compression_model=compression_model,
             pricing=pricing,  # Pass pricing to ScaleDown wrapper
         )
     
