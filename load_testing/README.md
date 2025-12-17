@@ -134,6 +134,10 @@ Edit `load_testing/config.yaml` to customize:
 - Increasing latency over time → Resource exhaustion
 - Low compression ratio → Context already concise
 
+## Sample Test Scenarios
+
+Sample test scenarios can be found in [`sample_scenarios.md`](sample_scenarios.md).
+
 ## Requirements
 
 - Python 3.10+
