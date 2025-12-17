@@ -1,0 +1,35 @@
+# ScaleDown Load Testing Configuration
+
+scaledown:
+  api_url: ${SCALEDOWN_API_URL}  # Will be replaced with env var or default
+  api_key: ${SCALEDOWN_API_KEY}  # Will be replaced with env var
+  timeout: 30  # Request timeout in seconds
+  max_retries: 2  # Maximum retry attempts
+  retry_delay: 2.0  # Initial delay for exponential backoff
+
+data:
+  dataset: hotpotqa  # Dataset name (must be registered in core/registry.py)
+  split: validation  # Dataset split (train/validation/test)
+  num_samples: 100  # Number of examples to pre-load
+  seed: 42  # Random seed for reproducibility
+
+load:
+  scenario: steady  # Scenario type (steady/ramp/spike/mixed)
+  default_users: 10  # Default concurrent users (can override via CLI)
+  default_spawn_rate: 2  # Default spawn rate (users/second, can override via CLI)
+  default_duration: 300  # Default duration in seconds (5 minutes, can override via CLI)
+
+compression:
+  # List of compression rates to test
+  # Supports "auto" and floats between 0.0 and 1.0
+  rates:
+    - auto
+  
+  # List of compression models to test
+  # Must be from SCALEDOWN_SUPPORTED_MODELS (see models/scaledown_client.py)
+  models:
+    - gemini-2.5-flash
+
+output:
+  raw_logs: false  # Set true to enable per-request JSONL logging
+  results_dir: load_testing/results  # Results directory
