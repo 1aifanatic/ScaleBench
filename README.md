@@ -253,3 +253,53 @@ Look for:
 1. Create client in `models/` implementing `ModelClient` interface
 2. Register in `core/registry.py`: `MODEL_REGISTRY["provider"] = MyClient`
 3. Use format `provider:model_name` in config
+
+## Load Testing
+
+The framework includes a load testing module for evaluating ScaleDown's compression API performance under concurrent load.
+
+### Quick Start
+
+```bash
+# Configure test parameters
+vim load_testing/config.yaml
+
+# Run with web UI (interactive)
+locust -f load_testing/locustfile.py
+
+# Run headless (automated)
+locust -f load_testing/locustfile.py --headless --users=50 --spawn-rate=5 --run-time=5m
+```
+
+### Features
+
+- **Realistic load testing**: Uses actual dataset examples (HotpotQA, etc.)
+- **Multiple compression configs**: Test different rates and models
+- **Custom metrics**: Track compression ratios, token savings, latency
+- **Thread-safe**: Handles concurrent requests safely
+- **Comprehensive outputs**: Locust built-ins + custom JSON/CSV exports
+
+### Test Scenarios
+
+**Steady load:**
+```bash
+locust -f load_testing/locustfile.py --users=50 --spawn-rate=5
+```
+
+**Ramp-up test:**
+```bash
+locust -f load_testing/locustfile.py --users=100 --spawn-rate=2 --run-time=10m
+```
+
+**Spike test:**
+```bash
+locust -f load_testing/locustfile.py --users=200 --spawn-rate=50 --run-time=5m
+```
+
+### Results Location
+
+- **Locust stats**: `--csv` and `--html` flags specify output location
+- **Custom metrics**: `load_testing/results/summaries/load_test_metrics_<timestamp>.{json,csv}`
+- **Web UI**: http://localhost:8089 (when running without `--headless`)
+
+**Full documentation:** See [load_testing/README.md](load_testing/README.md)
