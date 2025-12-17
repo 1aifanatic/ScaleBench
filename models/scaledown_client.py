@@ -22,6 +22,17 @@ from settings import settings
 logger = logging.getLogger(__name__)
 
 
+# Models supported by ScaleDown API for compression (as of Dec 2025)
+SCALEDOWN_SUPPORTED_MODELS = {
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+    "gpt-4o",
+    "gpt-4o-mini",
+}
+
+
 class ScaleDownClient(ModelClient):
     """Wrapper client that adds ScaleDown context compression.
     
@@ -46,6 +57,7 @@ class ScaleDownClient(ModelClient):
         retry_delay: Initial delay for exponential backoff (default: 2.0s)
         fallback_on_error: Whether to fallback to uncompressed on errors (default: True)
         pricing: Optional pricing override (if None, uses base_client.pricing)
+        compression_model: Model to use for ScaleDown compression (if None, defaults to gemini-2.5-flash)
     
     Environment Variables:
         SCALEDOWN_API_KEY: Required API key for ScaleDown
@@ -61,6 +73,7 @@ class ScaleDownClient(ModelClient):
         retry_delay: float = 2.0,
         fallback_on_error: bool = True,
         pricing: Optional['PricingInfo'] = None,
+        compression_model: Optional[str] = None,
     ):
         # Initialize with base client's model name and pricing (allow override)
         super().__init__(
@@ -83,6 +96,26 @@ class ScaleDownClient(ModelClient):
         self.fallback_on_error = fallback_on_error
         self.provider = "scaledown"
         
+        # Set compression model (default to gemini-2.5-flash if not provided)
+        if compression_model:
+            # Parse compression_model (handle "provider:model" format)
+            if ":" in compression_model:
+                parts = compression_model.split(":")
+                self.compression_model_name = parts[1] if len(parts) > 1 else parts[0]
+            else:
+                self.compression_model_name = compression_model
+            
+            # Validate against supported models
+            if self.compression_model_name not in SCALEDOWN_SUPPORTED_MODELS:
+                logger.warning(
+                    f"Compression model '{self.compression_model_name}' may not be supported by ScaleDown. "
+                    f"Supported models: {SCALEDOWN_SUPPORTED_MODELS}"
+                )
+        else:
+            # Default to gemini-2.5-flash (fast, cheap, widely supported)
+            self.compression_model_name = "gemini-2.5-flash"
+            logger.info(f"Using default compression model: {self.compression_model_name}")
+        
         # Get API key and URL from settings or environment
         self.scaledown_api_key = api_key or os.getenv("SCALEDOWN_API_KEY") or settings.SCALEDOWN_API_KEY
         self.scaledown_api_url = os.getenv("SCALEDOWN_API_URL") or settings.SCALEDOWN_API_URL
@@ -91,8 +124,9 @@ class ScaleDownClient(ModelClient):
             raise ValueError("SCALEDOWN_API_KEY environment variable not set")
         
         logger.info(
-            f"Initialized ScaleDownClient wrapping {base_client.provider}/{base_client.model_name} "
-            f"with compression_rate={compression_rate}"
+            f"Initialized ScaleDownClient: compression_model={self.compression_model_name}, "
+            f"generation_model={base_client.provider}/{base_client.model_name}, "
+            f"compression_rate={compression_rate}"
         )
     
     def generate(self, inp: GenerationInput) -> ModelOutput:
@@ -188,7 +222,7 @@ class ScaleDownClient(ModelClient):
         payload = {
             "context": context,
             "prompt": prompt,
-            "model": self.base_client.model_name,
+            "model": self.compression_model_name,
             "scaledown": {
                 "rate": self.compression_rate
             }
