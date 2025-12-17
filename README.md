@@ -78,6 +78,7 @@ Example:
       output_per_1m_tokens: 10.00
     scaledown:
       rate: auto  # or 0.5 for 50% compression
+      compression_model: gemini:2.5-flash  # Optional: model for compression (see supported models below)
   dataset:
     name: hotpotqa
     split: validation
@@ -88,6 +89,29 @@ Example:
   metrics:
     - exact_match
     - f1
+```
+
+#### ScaleDown Compression Models
+
+When using `mode: scaledown`, ScaleDown uses a separate model for context compression. You can specify which model to use via `scaledown.compression_model`:
+
+**Supported compression models**:
+- **Gemini**: `gemini-2.5-flash` (default), `gemini-2.5-pro`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`
+- **OpenAI**: `gpt-4o`, `gpt-4o-mini`
+
+**Important**: The compression model is separate from the downstream generation model. For example, you can compress with `gemini-2.5-flash` and generate with `gpt-4.1`.
+
+If `compression_model` is not specified, it defaults to `gemini-2.5-flash` (fast, cost-effective, widely supported).
+
+**Example - compression with Gemini, generation with GPT:**
+```yaml
+- id: hotpotqa_scaledown_gpt41
+  model:
+    name: openai:gpt-4.1              # Downstream generation model (can be any supported model)
+    mode: scaledown
+    scaledown:
+      rate: auto
+      compression_model: gemini-2.5-flash  # Compression model (limited to supported models)
 ```
 
 #### Default Model Pricing
