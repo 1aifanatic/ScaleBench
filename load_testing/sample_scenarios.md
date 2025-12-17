@@ -59,7 +59,7 @@ Simulate realistic steady load:
 ```bash
 locust -f load_testing/locustfile.py --headless \
   --users=10 --spawn-rate=2 --run-time=5m \
-  --csv=results/steady_test --html=results/steady_test.html
+  --csv=load_testing/results/steady_test --html=load_testing/results/steady_test.html
 ```
 
 **What to verify:**
