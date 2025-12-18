@@ -109,6 +109,8 @@ class OpenAIClient(ModelClient):
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     cost_usd=cost_usd,
+                    input_question=inp.user_prompt,
+                    input_context=inp.context,
                 )
                 
             except RateLimitError as e:

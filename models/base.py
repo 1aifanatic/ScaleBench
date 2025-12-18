@@ -73,6 +73,8 @@ class ModelOutput:
         cost_usd: Optional[float] = None,
         provider_metadata: Optional[Dict[str, Any]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        input_question: Optional[str] = None,
+        input_context: Optional[str] = None,
     ):
         self.text = text
         self.latency_ms = latency_ms
@@ -82,6 +84,8 @@ class ModelOutput:
         self.provider_metadata = provider_metadata or {}
         # Keep metadata for backward compatibility
         self.metadata = metadata or {}
+        self.input_question = input_question
+        self.input_context = input_context
 
 
 class ModelClient(ABC):

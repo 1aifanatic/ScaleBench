@@ -108,6 +108,8 @@ def run_experiment(config: ExperimentConfig) -> Dict[str, Any]:
             result = {
                 "id": example_id,
                 "model": config.model.name,
+                "input_question": output.input_question,
+                "input_context": output.input_context,
                 "pred": prediction,
                 "gold": gold_answers,
                 "input_tokens": output.input_tokens,

@@ -141,17 +141,19 @@ Each line contains:
 {
   "id": "example_id",
   "model": "openai:gpt-4o",
-  "pred": "model prediction",
-  "gold": ["ground truth answer"],
-  "input_tokens": 1250,
-  "output_tokens": 8,
-  "latency_ms": 1543.2,
-  "cost_usd": 0.003205,
+  "input_question": "What is the capital of France?",
+  "input_context": "France is a country in Europe...",
+  "pred": "Paris",
+  "gold": ["Paris"],
+  "input_tokens": 150,
+  "output_tokens": 5,
+  "latency_ms": 450.5,
+  "cost_usd": 0.000375,
   "metrics": {"exact_match": 1.0, "f1": 1.0}
 }
 ```
 
-**Note**: `cost_usd` will be `null` if pricing is not configured for the model.
+**Note**: `input_context` will contain the **compressed context** when using ScaleDown mode, and the full context otherwise. `cost_usd` will be `null` if pricing is not configured for the model.
 
 ### Summary Statistics (`results/summaries/`)
 
