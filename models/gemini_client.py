@@ -166,6 +166,7 @@ class GeminiClient(ModelClient):
                     provider_metadata=provider_metadata,
                     input_question=inp.user_prompt,
                     input_context=inp.context,
+                    input_system_prompt=inp.system_prompt,
                 )
             
             except Exception as e:

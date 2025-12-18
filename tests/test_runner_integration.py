@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from core.config import ExperimentConfig, ModelConfig, DatasetConfig, TaskConfig
 from evaluation.runner import run_experiment
 from evaluation.aggregation import aggregate_from_jsonl, save_summary_csv, save_summary_json
-from models.base import ModelOutput
+from models.base import ModelOutput, GenerationInput
 from dataset.base import Example
 
 
@@ -24,7 +24,11 @@ def test_runner_with_mock_components():
     
     # Create mock task
     mock_task = Mock()
-    mock_task.build_prompt.side_effect = lambda ex: f"Question: {ex['question']}"
+    mock_task.build_prompt.side_effect = lambda ex, **kwargs: GenerationInput(
+        user_prompt=f"Question: {ex['question']}",
+        context=ex.get("context"),
+        **kwargs
+    )
     mock_task.postprocess.side_effect = lambda text: text.strip().lower()
     mock_task.normalize.side_effect = lambda text: text.strip().lower()
     

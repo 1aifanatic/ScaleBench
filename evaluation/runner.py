@@ -61,9 +61,6 @@ def run_experiment(config: ExperimentConfig) -> Dict[str, Any]:
             
             # Generate response
             start_time = time.time()
-            # Pass context separately for ScaleDown compression
-            # Use task to format the question with instructions
-            task_prompt = task.build_prompt({"question": example.get("question", ""), "context": ""})
             
             # Build generation kwargs from experiment config.model.generation if present
             generation_kwargs = {}
@@ -78,11 +75,9 @@ def run_experiment(config: ExperimentConfig) -> Dict[str, Any]:
             if max_tokens_val is not None:
                 generation_kwargs["max_output_tokens"] = max_tokens_val
 
-            generation_input = GenerationInput(
-                user_prompt=task_prompt,
-                context=example.get("context", ""),
-                **generation_kwargs,
-            )
+            # Build input via task (handles prompt ordering and context separation)
+            generation_input = task.build_prompt(example, **generation_kwargs)
+            
             output = model_client.generate(generation_input)
             latency_ms = (time.time() - start_time) * 1000
             
@@ -108,6 +103,7 @@ def run_experiment(config: ExperimentConfig) -> Dict[str, Any]:
             result = {
                 "id": example_id,
                 "model": config.model.name,
+                "input_system_prompt": output.input_system_prompt,
                 "input_question": output.input_question,
                 "input_context": output.input_context,
                 "pred": prediction,
