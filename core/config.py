@@ -32,6 +32,7 @@ class DatasetConfig:
     split: str = "test"
     num_examples: Optional[int] = None
     seed: int = 42
+    task: Optional[str] = None  # For LongBench: specifies QA task (narrativeqa, qasper, etc.)
     
     def __post_init__(self):
         if not self.name:

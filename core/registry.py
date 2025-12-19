@@ -10,6 +10,7 @@ from models.base import ModelClient, PricingInfo, DEFAULT_MODEL_PRICING
 
 # Import datasets
 from dataset.hotpotqa import HotpotQADataset
+from dataset.longbench import LongBenchDataset
 from dataset.base import Dataset
 
 # Import tasks
@@ -18,6 +19,7 @@ from tasks.base import Task
 
 # Import metrics
 from metrics.classification import compute_exact_match, compute_f1
+from metrics.generation import compute_bertscore
 
 
 # ============================================================================
@@ -31,6 +33,7 @@ MODEL_REGISTRY: Dict[str, type] = {
 
 DATASET_REGISTRY: Dict[str, type] = {
     "hotpotqa": HotpotQADataset,
+    "longbench": LongBenchDataset,
 }
 
 TASK_REGISTRY: Dict[str, type] = {
@@ -40,6 +43,7 @@ TASK_REGISTRY: Dict[str, type] = {
 METRIC_REGISTRY: Dict[str, Callable] = {
     "exact_match": compute_exact_match,
     "f1": compute_f1,
+    "bertscore": compute_bertscore,
 }
 
 
@@ -104,7 +108,7 @@ def get_dataset(config: DatasetConfig) -> Dataset:
     """Instantiate dataset from config.
     
     Args:
-        config: DatasetConfig with name and optional subset.
+        config: DatasetConfig with name, optional subset, and optional task.
         
     Returns:
         Dataset instance.
@@ -119,7 +123,13 @@ def get_dataset(config: DatasetConfig) -> Dataset:
     
     dataset_class = DATASET_REGISTRY[dataset_name]
     
-    # Instantiate with subset if provided
+    # Handle LongBench: use config.task for task parameter
+    # If task is None, will be handled by runner.py for multi-task evaluation
+    if dataset_name == "longbench":
+        task = config.task or None  # Default to first task; None will be handled in runner
+        return dataset_class(name=config.name, task=task)
+    
+    # Handle other datasets: use subset if provided
     if subset:
         return dataset_class(name=config.name, subset=subset)
     else:

@@ -35,3 +35,40 @@ experiments:
     metrics:
       - exact_match
       - f1
+
+  # LongBench baseline single-task evaluation
+  - id: longbench_narrativeqa_baseline_openai
+    model:
+      name: openai:gpt-4o
+      mode: baseline
+    dataset:
+      name: longbench
+      split: test
+      task: narrativeqa
+      num_examples: 10
+      seed: 42
+    task:
+      name: rag_qa
+    metrics:
+      - f1
+      - bertscore
+
+  # LongBench scaledown single-task evaluation
+  - id: longbench_narrativeqa_scaledown_openai
+    model:
+      name: openai:gpt-4o
+      mode: scaledown
+      scaledown:
+        rate: auto
+        compression_model: gemini-2.5-flash
+    dataset:
+      name: longbench
+      split: test
+      task: narrativeqa
+      num_examples: 10
+      seed: 42
+    task:
+      name: rag_qa
+    metrics:
+      - f1
+      - bertscore

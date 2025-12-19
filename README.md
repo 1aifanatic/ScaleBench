@@ -6,9 +6,9 @@ Clean, modular, reproducible benchmarking framework to evaluate ScaleDown's cont
 
 This framework evaluates **accuracy**, **latency**, and **cost** when using ScaleDown compression vs. baseline LLMs on QA tasks with long contexts. Currently supports:
 
-- **Datasets**: HotpotQA (multi-hop QA)
-- **Models**: OpenAI , Gemini
-- **Metrics**: Exact Match, Token-level F1
+- **Datasets**: HotpotQA (multi-hop QA), LongBench (long-context QA with 4 tasks)
+- **Models**: OpenAI, Gemini
+- **Metrics**: Exact Match, Token-level F1, BERTScore (semantic similarity)
 - **Tasks**: RAG-style QA with context compression
 
 ## Setup
@@ -209,6 +209,84 @@ Look for:
 3. **Latency trade-off**: ScaleDown adds compression overhead but may reduce generation time
 4. **Cost savings**: ScaleDown should significantly reduce costs due to lower input token usage
 
+## LongBench Dataset
+
+LongBench is a benchmark for long-context evaluation with documents up to 40k+ tokens. This framework supports **4 English QA tasks** from LongBench:
+
+- **narrativeqa**: Question answering over long narratives (stories, novels)
+- **qasper**: Question answering over scientific papers
+- **multifieldqa_en**: Multi-domain question answering
+- **2wikimqa**: Multi-hop questions requiring information from multiple sources
+
+### Single-Task Evaluation
+
+Evaluate a single LongBench task:
+
+```yaml
+- id: longbench_narrativeqa_baseline_openai
+  model:
+    name: openai:gpt-4o
+    mode: baseline
+  dataset:
+    name: longbench
+    split: test
+    task: narrativeqa  # One of: narrativeqa, qasper, multifieldqa_en, 2wikimqa
+    num_examples: 20
+    seed: 42
+  task:
+    name: rag_qa
+  metrics:
+    - f1
+    - bertscore
+```
+
+### Multi-Task Evaluation
+
+Evaluate all 4 QA tasks in a single experiment by setting `task: null`:
+
+```yaml
+- id: longbench_all_baseline_openai
+  model:
+    name: openai:gpt-4o
+    mode: baseline
+  dataset:
+    name: longbench
+    split: test
+    task: null  # Runs all 4 QA tasks automatically
+    num_examples: 20  # Per task (80 total examples)
+    seed: 42
+  task:
+    name: rag_qa
+  metrics:
+    - f1
+    - bertscore
+```
+
+**Multi-task results structure**:
+- Separate raw JSONL files for each task: `{exp_id}_narrativeqa_{timestamp}.jsonl`, etc.
+- Summary CSV includes overall row + per-task breakdown
+- Summary JSON includes nested `per_task` structure with individual metrics
+
+### BERTScore Metric
+
+BERTScore evaluates **semantic similarity** using contextual embeddings from BERT models, providing more nuanced evaluation than token-level metrics.
+
+**Configuration**:
+```yaml
+metrics:
+  - f1           # Token-level F1
+  - bertscore    # Semantic similarity (precision, recall, F1)
+```
+
+**Returns three scores**:
+- `bertscore_precision`: How much of the prediction is semantically relevant
+- `bertscore_recall`: How much of the reference is covered by the prediction
+- `bertscore_f1`: Harmonic mean of precision and recall
+
+**Model download**: On first use, BERTScore downloads `distilbert-base-uncased` (~268MB). This happens automatically and is cached for future runs.
+
+**Note**: BERTScore is more robust to paraphrasing than exact match or token F1, making it ideal for long-context QA where answers may be expressed differently.
+
 ## Project Structure
 
 ```
@@ -219,7 +297,8 @@ Look for:
 │   └── registry.py            # Component factories (models/datasets/tasks/metrics)
 ├── dataset/
 │   ├── base.py                # Dataset ABC
-│   └── hotpotqa.py            # HotpotQA loader
+│   ├── hotpotqa.py            # HotpotQA loader
+│   └── longbench.py           # LongBench loader (4 QA tasks)
 ├── tasks/
 │   ├── base.py                # Task ABC with normalization
 │   └── rag_task.py            # RAG QA task with prompt formatting
@@ -229,7 +308,8 @@ Look for:
 │   ├── gemini_client.py       # Gemini wrapper
 │   └── scaledown_client.py    # ScaleDown compression wrapper
 ├── metrics/
-│   └── classification.py      # Exact match and F1 metrics
+│   ├── classification.py      # Exact match and F1 metrics
+│   └── generation.py          # BERTScore and generation metrics
 ├── evaluation/
 │   ├── runner.py              # Experiment execution engine
 │   └── aggregation.py         # Results statistics computation
@@ -242,12 +322,12 @@ Look for:
 ## Extending the Framework
 
 ### Add a new dataset
-1. Create `dataset/my_dataset.py` implementing `Dataset` ABC
+1. Create `dataset/my_dataset.py` implementing `Dataset` ABC (see `hotpotqa.py` or `longbench.py` as examples)
 2. Register in `core/registry.py`: `DATASET_REGISTRY["my_dataset"] = MyDataset`
 3. Add to `config/experiments.yaml`
 
 ### Add a new metric
-1. Create function in `metrics/` returning `{"metric_name": float}`
+1. Create function in `metrics/` returning `{"metric_name": float}` (see `classification.py` or `generation.py` as examples)
 2. Register in `core/registry.py`: `METRIC_REGISTRY["my_metric"] = my_metric_fn`
 3. Add to experiment config metrics list
 
