@@ -1,5 +1,5 @@
 """Simple registries for models/datasets/tasks/metrics."""
-from typing import Dict, List, Callable
+from typing import Dict, List, Callable, Optional
 from core.config import ModelConfig, DatasetConfig, TaskConfig
 
 # Import model clients
@@ -136,11 +136,12 @@ def get_dataset(config: DatasetConfig) -> Dataset:
         return dataset_class(name=config.name)
 
 
-def get_task(config: TaskConfig) -> Task:
+def get_task(config: TaskConfig, dataset_name: Optional[str] = None) -> Task:
     """Instantiate task from config.
     
     Args:
         config: TaskConfig with name.
+        dataset_name: Optional dataset name to load specific prompts.
         
     Returns:
         Task instance.
@@ -151,6 +152,13 @@ def get_task(config: TaskConfig) -> Task:
         raise ValueError(f"Unknown task: {task_name}. Available: {list(TASK_REGISTRY.keys())}")
     
     task_class = TASK_REGISTRY[task_name]
+    
+    # Pass dataset_name if the task class supports it
+    import inspect
+    sig = inspect.signature(task_class.__init__)
+    if "dataset_name" in sig.parameters:
+        return task_class(name=config.name, dataset_name=dataset_name)
+    
     return task_class(name=config.name)
 
 

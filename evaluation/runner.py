@@ -47,7 +47,7 @@ def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
     # Instantiate components
     model_client = get_model_client(config.model)
     dataset = get_dataset(config.dataset)
-    task = get_task(config.task)
+    task = get_task(config.task, dataset_name=config.dataset.name)
     metric_fns = get_metrics(config.metrics)
     
     # Setup output paths with timestamp

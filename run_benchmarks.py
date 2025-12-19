@@ -183,13 +183,13 @@ def _display_results_summary(results, failed_experiments):
         has_multi_task = any(r.get("is_multi_task", False) for r in results)
         
         # Display main results table
-        table = Table(title="Results Summary", show_header=True, header_style="bold green")
-        table.add_column("Experiment", style="cyan")
-        table.add_column("N", justify="right", style="white")
-        table.add_column("Metrics", style="yellow")
-        table.add_column("Avg Latency (ms)", justify="right", style="magenta")
-        table.add_column("Avg Tokens", justify="right", style="blue")
-        table.add_column("Avg Cost ($)", justify="right", style="green")
+        table = Table(title="Results Summary", show_header=True, header_style="bold green", expand=True)
+        table.add_column("Experiment", style="cyan", min_width=25)
+        table.add_column("N", justify="right", style="white", width=5)
+        table.add_column("Metrics", style="yellow", no_wrap=True)
+        table.add_column("Avg Latency (ms)", justify="right", style="magenta", width=18)
+        table.add_column("Avg Tokens", justify="right", style="blue", width=15)
+        table.add_column("Avg Cost ($)", justify="right", style="green", width=15)
         
         for result in results:
             # Extract metric means from nested structure
@@ -232,11 +232,11 @@ def _display_results_summary(results, failed_experiments):
             if result.get("is_multi_task", False):
                 console.print(f"\n[bold cyan]{result['experiment_id']} - Per-Task Breakdown:[/bold cyan]")
                 
-                task_table = Table(show_header=True, header_style="bold blue")
-                task_table.add_column("Task", style="yellow")
-                task_table.add_column("N", justify="right", style="white")
-                task_table.add_column("Metrics", style="green")
-                task_table.add_column("Avg Latency (ms)", justify="right", style="magenta")
+                task_table = Table(show_header=True, header_style="bold blue", expand=True)
+                task_table.add_column("Task", style="yellow", min_width=20)
+                task_table.add_column("N", justify="right", style="white", width=5)
+                task_table.add_column("Metrics", style="green", no_wrap=True)
+                task_table.add_column("Avg Latency (ms)", justify="right", style="magenta", width=18)
                 
                 for task_name, task_result in result["per_task"].items():
                     task_metrics_str = ", ".join([f"{k}={v:.2f}" for k, v in task_result["metrics"].items()])
