@@ -36,7 +36,7 @@ class LongBenchDataset(Dataset):
             ValueError: If task is not in VALID_TASKS.
         """
         super().__init__(name)
-        if task not in VALID_TASKS:
+        if task is not None and task not in VALID_TASKS:
             raise ValueError(f"Invalid task '{task}'. Must be one of: {VALID_TASKS}")
         self.task = task
         self._ensure_data_downloaded()
