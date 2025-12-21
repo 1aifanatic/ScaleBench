@@ -203,6 +203,9 @@ class ScaleDownClient(ModelClient):
             output_tokens=base_output.output_tokens,
             cost_usd=base_output.cost_usd,
             provider_metadata=provider_metadata,
+            input_question=inp.user_prompt,
+            input_context=compressed_context,
+            input_system_prompt=inp.system_prompt,
         )
     
     def _compress_context(

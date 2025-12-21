@@ -17,14 +17,15 @@ class Task(ABC):
         self.name = name
 
     @abstractmethod
-    def build_prompt(self, example: Dict[str, Any]) -> str:
-        """Build prompt from example.
+    def build_prompt(self, example: Dict[str, Any], **kwargs) -> "GenerationInput":
+        """Build GenerationInput from example.
         
         Args:
             example: Example dictionary from dataset.
+            **kwargs: Additional generation parameters (temperature, etc.)
             
         Returns:
-            Formatted prompt string for model input.
+            GenerationInput object.
         """
         pass
 

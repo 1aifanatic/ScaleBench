@@ -39,12 +39,14 @@ def test_rag_task_build_prompt():
         answer=["Paris"],
     )
     
-    prompt = task.build_prompt(example)
+    gen_input = task.build_prompt(example)
     
-    # Check prompt contains key elements
-    assert "Paris is the capital of France" in prompt
-    assert "What is the capital of France?" in prompt
-    assert len(prompt) > 50  # Has instruction text
+    # Check GenerationInput fields
+    assert "Instructions:" in gen_input.system_prompt
+    assert "Paris is the capital of France" in gen_input.context
+    assert "What is the capital of France?" in gen_input.user_prompt
+    assert "Question:" in gen_input.user_prompt
+    assert "Answer:" in gen_input.user_prompt
 
 
 def test_rag_task_postprocess():

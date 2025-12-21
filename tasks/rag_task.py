@@ -14,35 +14,32 @@ class RAGTask(Task):
         """
         super().__init__(name)
 
-    def build_prompt(self, example: Dict[str, Any]) -> str:
-        """Build prompt for RAG QA.
-        
-        Instructs model to answer concisely using only provided context.
+    def build_prompt(self, example: Dict[str, Any], **kwargs) -> "GenerationInput":
+        """Build GenerationInput with specific ordering: Instructions -> Context -> Question.
         
         Args:
             example: Example with 'context' and 'question' fields.
+            **kwargs: Additional generation parameters.
             
         Returns:
-            Formatted prompt string.
+            GenerationInput object.
         """
-        context = example.get("context", "")
-        question = example.get("question", "")
+        from models.base import GenerationInput
         
-        prompt = f"""Answer the following question using ONLY the information provided in the context below. 
-
-Context:
-{context}
-
-Question: {question}
-
-Instructions:
+        instructions = """Instructions:
 - Answer directly in just 1-3 words
-- Use only information from the context
-- Do not add explanations or extra information
-
-Answer:"""
+- Use only information from the context provided below
+- Do not add explanations or extra information"""
         
-        return prompt
+        question = example.get("question", "")
+        context = example.get("context", "")
+        
+        return GenerationInput(
+            system_prompt=instructions,
+            context=f"Context:\n{context}",
+            user_prompt=f"Question: {question}\n\nAnswer:",
+            **kwargs
+        )
 
     def postprocess(self, output: str) -> str:
         """Extract answer from model output.

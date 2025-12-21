@@ -164,6 +164,9 @@ class GeminiClient(ModelClient):
                     output_tokens=output_tokens,
                     cost_usd=cost_usd,
                     provider_metadata=provider_metadata,
+                    input_question=inp.user_prompt,
+                    input_context=inp.context,
+                    input_system_prompt=inp.system_prompt,
                 )
             
             except Exception as e:
