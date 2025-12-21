@@ -177,3 +177,148 @@ if __name__ == "__main__":
     print()
     test_aggregation_from_jsonl()
     print("\n✓✓✓ All integration tests passed!")
+
+
+def test_longbench_single_task_experiment():
+    """Test LongBench single-task experiment with mocked components."""
+    
+    # Create mock dataset
+    mock_dataset = Mock()
+    mock_dataset.load_examples.return_value = iter([
+        Example(id="narrativeqa_1", context="Long context 1", question="Q1?", answer=["answer1"]),
+        Example(id="narrativeqa_2", context="Long context 2", question="Q2?", answer=["answer2"]),
+    ])
+    
+    # Create mock task
+    mock_task = Mock()
+    mock_task.build_prompt.side_effect = lambda ex, **kwargs: GenerationInput(
+        user_prompt=f"Question: {ex['question']}",
+        context=ex.get("context"),
+        **kwargs
+    )
+    mock_task.postprocess.side_effect = lambda text: text.strip().lower()
+    mock_task.normalize.side_effect = lambda text: text.strip().lower()
+    
+    # Create mock model client
+    mock_model = Mock()
+    mock_model.generate.side_effect = [
+        ModelOutput(text="Answer1", latency_ms=100, input_tokens=50, output_tokens=5),
+        ModelOutput(text="Answer2", latency_ms=120, input_tokens=55, output_tokens=6),
+    ]
+    
+    # Create mock metrics
+    mock_metrics = {
+        "f1": lambda predictions, references, normalize_fn=None: {"f1": 0.90},
+        "bertscore": lambda predictions, references, normalize_fn=None: {
+            "bertscore_precision": 0.85,
+            "bertscore_recall": 0.88,
+            "bertscore_f1": 0.86,
+        },
+    }
+    
+    # Create experiment config for single task
+    config = ExperimentConfig(
+        id="longbench_narrativeqa_test",
+        model=ModelConfig(name="test:model"),
+        dataset=DatasetConfig(name="longbench", split="test", task="narrativeqa", num_examples=2, seed=42),
+        task=TaskConfig(name="rag_qa"),
+        metrics=["f1", "bertscore"],
+    )
+    
+    # Patch registries
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        
+        mock_raw_dir = tmpdir / "results" / "raw"
+        mock_raw_dir.mkdir(parents=True, exist_ok=True)
+        
+        with patch("evaluation.runner.Path") as mock_path_class:
+            mock_path_class.return_value = mock_raw_dir
+            
+            with patch("evaluation.runner.get_model_client", return_value=mock_model), \
+                 patch("evaluation.runner.get_dataset", return_value=mock_dataset), \
+                 patch("evaluation.runner.get_task", return_value=mock_task), \
+                 patch("evaluation.runner.get_metrics", return_value=mock_metrics):
+                
+                # Run experiment
+                result = run_experiment(config)
+                
+                # Verify result structure
+                assert result["experiment_id"] == "longbench_narrativeqa_test"
+                assert result["model"] == "test:model"
+                assert result["dataset"] == "longbench"
+                assert result["n_examples"] == 2
+                assert "f1" in result["metrics"]
+                assert "bertscore_precision" in result["metrics"]
+                assert "bertscore_recall" in result["metrics"]
+                assert "bertscore_f1" in result["metrics"]
+                assert result["avg_latency_ms"] > 0
+                assert result["avg_input_tokens"] > 0
+                
+                print("✓ LongBench single-task test passed")
+                print(f"  - task: narrativeqa")
+                print(f"  - n_examples: {result['n_examples']}")
+                print(f"  - f1: {result['metrics']['f1']:.2f}")
+                print(f"  - bertscore_f1: {result['metrics']['bertscore_f1']:.2f}")
+
+
+def test_longbench_multi_task_experiment():
+    """Test LongBench multi-task experiment with mocked components."""
+    from dataclasses import replace
+    from dataset.longbench import VALID_TASKS
+    
+    # Create experiment config for multi-task (task=None)
+    config = ExperimentConfig(
+        id="longbench_all_test",
+        model=ModelConfig(name="test:model"),
+        dataset=DatasetConfig(name="longbench", split="test", task=None, num_examples=2, seed=42),
+        task=TaskConfig(name="rag_qa"),
+        metrics=["f1"],
+    )
+    
+    # Mock the single-task experiment function
+    def mock_single_task_exp(task_config):
+        task_name = task_config.dataset.task
+        return {
+            "experiment_id": f"{config.id}_{task_name}",
+            "model": "test:model",
+            "dataset": "longbench",
+            "n_examples": 2,
+            "metrics": {"f1": 0.85 + (0.05 * VALID_TASKS.index(task_name))},
+            "avg_latency_ms": 100.0,
+            "avg_input_tokens": 50.0,
+            "avg_output_tokens": 5.0,
+            "total_cost_usd": 0.01,
+            "avg_cost_usd": 0.005,
+            "raw_output_file": f"results/raw/{config.id}_{task_name}_20251218_120000.jsonl",
+        }
+    
+    with patch("evaluation.runner._run_single_task_experiment", side_effect=mock_single_task_exp):
+        # Import here to access the actual multi-task function
+        from evaluation.runner import _run_multi_task_experiment
+        
+        result = _run_multi_task_experiment(config)
+        
+        # Verify multi-task result structure
+        assert result["experiment_id"] == "longbench_all_test"
+        assert result["is_multi_task"] is True
+        assert result["n_examples"] == 8  # 2 examples * 4 tasks
+        assert "per_task" in result
+        assert len(result["per_task"]) == 4
+        
+        # Check all tasks present
+        for task in VALID_TASKS:
+            assert task in result["per_task"]
+            assert result["per_task"][task]["n_examples"] == 2
+        
+        # Check aggregated metrics exist
+        assert "f1" in result["metrics"]
+        assert result["avg_latency_ms"] > 0
+        
+        print("✓ LongBench multi-task test passed")
+        print(f"  - tasks: {len(result['per_task'])}")
+        print(f"  - total n_examples: {result['n_examples']}")
+        print(f"  - overall f1: {result['metrics']['f1']:.2f}")
+        print(f"  - per_task breakdown:")
+        for task, task_result in result["per_task"].items():
+            print(f"    - {task}: f1={task_result['metrics']['f1']:.2f}")

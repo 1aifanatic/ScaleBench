@@ -99,21 +99,39 @@ def main():
             task = progress.add_task(f"Running {exp.id}...", total=None)
             
             try:
-                # Run experiment (writes raw JSONL with timestamp)
+                # Run experiment (returns aggregated results directly for multi-task)
                 result = run_experiment(exp)
-                progress.update(task, description=f"[green]✓[/green] {exp.id}")
                 
-                # Aggregate from JSONL and save summaries
-                raw_jsonl = Path(result["raw_output_file"])
-                aggregated = aggregate_from_jsonl(raw_jsonl)
-                results.append(aggregated)
+                # Check if this is a multi-task experiment
+                is_multi_task = result.get("is_multi_task", False)
                 
-                # Extract timestamp from filename (format: {exp_id}_{timestamp}.jsonl)
-                timestamp = raw_jsonl.stem.rsplit("_", 1)[-1]
-                
-                summary_dir = Path("results/summaries")
-                save_summary_csv(aggregated, summary_dir / f"{exp.id}_{timestamp}_summary.csv")
-                save_summary_json(aggregated, summary_dir / f"{exp.id}_{timestamp}_summary.json")
+                if is_multi_task:
+                    # Multi-task: result already contains aggregated data
+                    progress.update(task, description=f"[green]✓[/green] {exp.id} (multi-task)")
+                    results.append(result)
+                    
+                    # Extract timestamp from first raw file
+                    first_raw_file = Path(result["raw_output_files"][0])
+                    timestamp = first_raw_file.stem.rsplit("_", 1)[-1]
+                    
+                    # Save summaries
+                    summary_dir = Path("results/summaries")
+                    save_summary_csv(result, summary_dir / f"{exp.id}_{timestamp}_summary.csv")
+                    save_summary_json(result, summary_dir / f"{exp.id}_{timestamp}_summary.json")
+                else:
+                    # Single-task: need to aggregate from JSONL
+                    progress.update(task, description=f"[green]✓[/green] {exp.id}")
+                    
+                    raw_jsonl = Path(result["raw_output_file"])
+                    aggregated = aggregate_from_jsonl(raw_jsonl)
+                    results.append(aggregated)
+                    
+                    # Extract timestamp from filename (format: {exp_id}_{timestamp}.jsonl)
+                    timestamp = raw_jsonl.stem.rsplit("_", 1)[-1]
+                    
+                    summary_dir = Path("results/summaries")
+                    save_summary_csv(aggregated, summary_dir / f"{exp.id}_{timestamp}_summary.csv")
+                    save_summary_json(aggregated, summary_dir / f"{exp.id}_{timestamp}_summary.json")
                 
             except Exception as e:
                 progress.update(task, description=f"[red]✗[/red] {exp.id}")
@@ -136,14 +154,21 @@ def _display_experiment_summary(experiments):
     table.add_column("Model", style="green")
     table.add_column("Dataset", style="yellow")
     table.add_column("Task", style="blue")
+    table.add_column("Dataset Task", style="magenta")  # New column for LongBench task
     table.add_column("N", justify="right", style="white")
     
     for exp in experiments:
+        # Format dataset task info
+        dataset_task = ""
+        if exp.dataset.name == "longbench":
+            dataset_task = exp.dataset.task or "all (multi-task)"
+        
         table.add_row(
             exp.id,
             f"{exp.model.name} ({exp.model.mode})",
             f"{exp.dataset.name} ({exp.dataset.split})",
             exp.task.name,
+            dataset_task,
             str(exp.dataset.num_examples or "all"),
         )
     
@@ -154,22 +179,40 @@ def _display_experiment_summary(experiments):
 def _display_results_summary(results, failed_experiments):
     """Display final results summary table."""
     if results:
-        table = Table(title="Results Summary", show_header=True, header_style="bold green")
-        table.add_column("Experiment", style="cyan")
-        table.add_column("N", justify="right", style="white")
-        table.add_column("Metrics", style="yellow")
-        table.add_column("Avg Latency (ms)", justify="right", style="magenta")
-        table.add_column("Avg Tokens", justify="right", style="blue")
-        table.add_column("Avg Cost ($)", justify="right", style="green")
+        # Check if any multi-task results
+        has_multi_task = any(r.get("is_multi_task", False) for r in results)
+        
+        # Display main results table
+        table = Table(title="Results Summary", show_header=True, header_style="bold green", expand=True)
+        table.add_column("Experiment", style="cyan", min_width=25)
+        table.add_column("N", justify="right", style="white", width=5)
+        table.add_column("Metrics", style="yellow", no_wrap=True)
+        table.add_column("Avg Latency (ms)", justify="right", style="magenta", width=18)
+        table.add_column("Avg Tokens", justify="right", style="blue", width=15)
+        table.add_column("Avg Cost ($)", justify="right", style="green", width=15)
         
         for result in results:
             # Extract metric means from nested structure
-            metrics_str = ", ".join([f"{k}={v['mean']:.2f}" for k, v in result["metrics"].items()])
-            total_tokens = result["tokens"]["avg_input_tokens"] + result["tokens"]["avg_output_tokens"]
+            metrics_str = ", ".join([f"{k}={v['mean']:.2f}" if isinstance(v, dict) else f"{k}={v:.2f}" 
+                                     for k, v in result["metrics"].items()])
+            
+            # Handle both old and new token structure
+            if "tokens" in result:
+                total_tokens = result["tokens"]["avg_input_tokens"] + result["tokens"]["avg_output_tokens"]
+            else:
+                total_tokens = result.get("avg_input_tokens", 0) + result.get("avg_output_tokens", 0)
+            
+            # Handle latency
+            if "latency_ms" in result:
+                avg_latency = result["latency_ms"]["mean"]
+            else:
+                avg_latency = result.get("avg_latency_ms", 0)
             
             # Format cost (handle None case)
             if "cost" in result and result["cost"]:
                 cost_str = f"${result['cost']['mean_usd']:.4f}"
+            elif result.get("avg_cost_usd") is not None:
+                cost_str = f"${result['avg_cost_usd']:.4f}"
             else:
                 cost_str = "N/A"
             
@@ -177,12 +220,34 @@ def _display_results_summary(results, failed_experiments):
                 result["experiment_id"],
                 str(result["n_examples"]),
                 metrics_str,
-                f"{result['latency_ms']['mean']:.1f}",
+                f"{avg_latency:.1f}",
                 f"{total_tokens:.0f}",
                 cost_str,
             )
         
         console.print(table)
+        
+        # Display per-task breakdown for multi-task experiments
+        for result in results:
+            if result.get("is_multi_task", False):
+                console.print(f"\n[bold cyan]{result['experiment_id']} - Per-Task Breakdown:[/bold cyan]")
+                
+                task_table = Table(show_header=True, header_style="bold blue", expand=True)
+                task_table.add_column("Task", style="yellow", min_width=20)
+                task_table.add_column("N", justify="right", style="white", width=5)
+                task_table.add_column("Metrics", style="green", no_wrap=True)
+                task_table.add_column("Avg Latency (ms)", justify="right", style="magenta", width=18)
+                
+                for task_name, task_result in result["per_task"].items():
+                    task_metrics_str = ", ".join([f"{k}={v:.2f}" for k, v in task_result["metrics"].items()])
+                    task_table.add_row(
+                        task_name,
+                        str(task_result["n_examples"]),
+                        task_metrics_str,
+                        f"{task_result['avg_latency_ms']:.1f}",
+                    )
+                
+                console.print(task_table)
     
     if failed_experiments:
         console.print("\n[bold red]Failed Experiments:[/bold red]")

@@ -97,12 +97,26 @@ def aggregate_from_jsonl(jsonl_path: Path) -> Dict[str, Any]:
 def save_summary_csv(aggregated: Dict[str, Any], output_path: Path):
     """Save aggregated results as CSV.
     
+    Handles both single-task and multi-task results.
+    For multi-task, saves one row per task + overall row.
+    
     Args:
-        aggregated: Dictionary from aggregate_from_jsonl().
+        aggregated: Dictionary from aggregate_from_jsonl() or multi-task results.
         output_path: Path to output CSV file.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
+    # Check if multi-task
+    is_multi_task = aggregated.get("is_multi_task", False)
+    
+    if is_multi_task:
+        _save_multi_task_csv(aggregated, output_path)
+    else:
+        _save_single_task_csv(aggregated, output_path)
+
+
+def _save_single_task_csv(aggregated: Dict[str, Any], output_path: Path):
+    """Save single-task results as CSV."""
     # Flatten structure for CSV
     row = {
         "experiment_id": aggregated["experiment_id"],
@@ -137,7 +151,6 @@ def save_summary_csv(aggregated: Dict[str, Any], output_path: Path):
         row["cost_p95_usd"] = None
     
     # Compression ratio (if ScaleDown mode)
-    # For now, leave as placeholder since we need baseline comparison
     row["compression_ratio"] = None
     
     # Write CSV
@@ -147,11 +160,66 @@ def save_summary_csv(aggregated: Dict[str, Any], output_path: Path):
         writer.writerow(row)
 
 
+def _save_multi_task_csv(aggregated: Dict[str, Any], output_path: Path):
+    """Save multi-task results as CSV with per-task rows + overall row."""
+    rows = []
+    
+    # Overall row first
+    overall_row = {
+        "experiment_id": aggregated["experiment_id"],
+        "model": aggregated["model"],
+        "task": "OVERALL",
+        "n_examples": aggregated["n_examples"],
+    }
+    
+    # Add metrics
+    for metric_name, value in aggregated["metrics"].items():
+        overall_row[f"{metric_name}_mean"] = value
+    
+    overall_row["avg_latency_ms"] = aggregated["avg_latency_ms"]
+    overall_row["avg_input_tokens"] = aggregated["avg_input_tokens"]
+    overall_row["avg_output_tokens"] = aggregated["avg_output_tokens"]
+    overall_row["total_cost_usd"] = aggregated.get("total_cost_usd")
+    overall_row["avg_cost_usd"] = aggregated.get("avg_cost_usd")
+    
+    rows.append(overall_row)
+    
+    # Per-task rows
+    for task_name, task_result in aggregated["per_task"].items():
+        task_row = {
+            "experiment_id": aggregated["experiment_id"],
+            "model": aggregated["model"],
+            "task": task_name,
+            "n_examples": task_result["n_examples"],
+        }
+        
+        for metric_name, value in task_result["metrics"].items():
+            task_row[f"{metric_name}_mean"] = value
+        
+        task_row["avg_latency_ms"] = task_result["avg_latency_ms"]
+        task_row["avg_input_tokens"] = task_result["avg_input_tokens"]
+        task_row["avg_output_tokens"] = task_result["avg_output_tokens"]
+        task_row["total_cost_usd"] = task_result.get("total_cost_usd")
+        task_row["avg_cost_usd"] = task_result.get("avg_cost_usd")
+        
+        rows.append(task_row)
+    
+    # Write CSV
+    with open(output_path, "w", newline="") as f:
+        if rows:
+            writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+            writer.writeheader()
+            writer.writerows(rows)
+
+
 def save_summary_json(aggregated: Dict[str, Any], output_path: Path):
     """Save aggregated results as JSON.
     
+    Handles both single-task and multi-task results.
+    Multi-task results are saved with nested per_task structure.
+    
     Args:
-        aggregated: Dictionary from aggregate_from_jsonl().
+        aggregated: Dictionary from aggregate_from_jsonl() or multi-task results.
         output_path: Path to output JSON file.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
