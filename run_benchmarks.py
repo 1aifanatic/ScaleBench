@@ -3,6 +3,7 @@ import argparse
 import sys
 import logging
 from pathlib import Path
+from typing import Optional
 
 from rich.console import Console
 from rich.table import Table
@@ -11,6 +12,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from core.config import load_config
 from evaluation.runner import run_experiment
 from evaluation.aggregation import aggregate_from_jsonl, save_summary_csv, save_summary_json
+from huggingface.uploader import upload_result
 
 # Configure logging
 logging.basicConfig(
@@ -48,6 +50,22 @@ def main():
         "--verbose",
         action="store_true",
         help="Enable verbose logging.",
+    )
+    parser.add_argument(
+        "--upload-hf",
+        action="store_true",
+        help="Upload results to HuggingFace dataset after experiment completes.",
+    )
+    parser.add_argument(
+        "--no-upload-hf",
+        action="store_true",
+        help="Disable HF upload even if enabled in config.",
+    )
+    parser.add_argument(
+        "--hf-token",
+        type=str,
+        default=None,
+        help="HuggingFace token for uploads (optional, falls back to HF_TOKEN env var).",
     )
 
     args = parser.parse_args()
@@ -116,8 +134,14 @@ def main():
                     
                     # Save summaries
                     summary_dir = Path("results/summaries")
-                    save_summary_csv(result, summary_dir / f"{exp.id}_{timestamp}_summary.csv")
-                    save_summary_json(result, summary_dir / f"{exp.id}_{timestamp}_summary.json")
+                    summary_csv_path = summary_dir / f"{exp.id}_{timestamp}_summary.csv"
+                    summary_json_path = summary_dir / f"{exp.id}_{timestamp}_summary.json"
+                    save_summary_csv(result, summary_csv_path)
+                    save_summary_json(result, summary_json_path)
+                    
+                    # Upload to HF if requested
+                    if _should_upload_to_hf(args, config):
+                        _upload_to_hf(summary_json_path, args.hf_token, exp.id)
                 else:
                     # Single-task: need to aggregate from JSONL
                     progress.update(task, description=f"[green]✓[/green] {exp.id}")
@@ -130,8 +154,14 @@ def main():
                     timestamp = raw_jsonl.stem.rsplit("_", 1)[-1]
                     
                     summary_dir = Path("results/summaries")
-                    save_summary_csv(aggregated, summary_dir / f"{exp.id}_{timestamp}_summary.csv")
-                    save_summary_json(aggregated, summary_dir / f"{exp.id}_{timestamp}_summary.json")
+                    summary_csv_path = summary_dir / f"{exp.id}_{timestamp}_summary.csv"
+                    summary_json_path = summary_dir / f"{exp.id}_{timestamp}_summary.json"
+                    save_summary_csv(aggregated, summary_csv_path)
+                    save_summary_json(aggregated, summary_json_path)
+                    
+                    # Upload to HF if requested
+                    if _should_upload_to_hf(args, config):
+                        _upload_to_hf(summary_json_path, args.hf_token, exp.id)
                 
             except Exception as e:
                 progress.update(task, description=f"[red]✗[/red] {exp.id}")
@@ -145,6 +175,46 @@ def main():
     # Exit with error if any experiments failed
     if failed_experiments:
         sys.exit(1)
+
+
+def _should_upload_to_hf(args, config) -> bool:
+    """Determine if results should be uploaded to HF.
+    
+    Priority:
+    1. CLI --no-upload-hf (disable)
+    2. CLI --upload-hf (enable)
+    3. Config upload_to_hf setting
+    4. Default: False
+    """
+    if args.no_upload_hf:
+        return False
+    
+    if args.upload_hf:
+        return True
+    
+    # Check config setting
+    upload_config = getattr(config, 'upload_to_hf', False)
+    return upload_config
+
+
+def _upload_to_hf(summary_path: Path, token: Optional[str], experiment_id: str):
+    """Upload result to HuggingFace dataset."""
+    try:
+        logger.info(f"Uploading {experiment_id} to HuggingFace...")
+        success = upload_result(
+            summary_path,
+            token=token,
+            force=False  # Skip if already uploaded
+        )
+        
+        if success:
+            console.print(f"  [green]✓[/green] Uploaded to HuggingFace")
+        else:
+            console.print(f"  [yellow]○[/yellow] Already uploaded or skipped")
+            
+    except Exception as e:
+        logger.error(f"Failed to upload {experiment_id} to HuggingFace: {e}")
+        console.print(f"  [red]✗[/red] HF upload failed: {e}")
 
 
 def _display_experiment_summary(experiments):
