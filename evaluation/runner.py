@@ -134,6 +134,9 @@ def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
             result = {
                 "id": example_id,
                 "model": config.model.name,
+                "dataset": config.dataset.name,
+                "task": config.task.name,
+                "mode": config.model.mode,
                 "input_system_prompt": output.input_system_prompt,
                 "input_question": output.input_question,
                 "input_context": output.input_context,

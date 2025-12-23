@@ -37,22 +37,48 @@ def load_data(force_refresh: bool = False):
     return df, columns, metric_cols
 
 
-def refresh_data():
+def refresh_data(model_filter, dataset_filter, mode_filter):
     """Refresh data from HuggingFace dataset.
     
-    Forces re-download bypassing cache.
+    Forces re-download bypassing cache and updates dropdowns.
+    
+    Args:
+        model_filter: Current model filter dropdown
+        dataset_filter: Current dataset filter dropdown
+        mode_filter: Current mode filter dropdown
     
     Returns:
-        Tuple of (main_leaderboard, comparison_table, status_message)
+        Tuple of (leaderboard, comparison, status, updated_model_dropdown, updated_dataset_dropdown, updated_mode_dropdown)
     """
     try:
         df, columns, _ = load_data(force_refresh=True)
         leaderboard = init_leaderboard(df, columns)
         comparison = init_comparison_table(df)
-        return leaderboard, comparison, "✓ Data refreshed successfully"
+        
+        # Update dropdown choices with new data
+        models = ["All"] + sorted(df["Model"].unique().tolist()) if not df.empty and "Model" in df.columns else ["All"]
+        datasets = ["All"] + sorted(df["Dataset"].unique().tolist()) if not df.empty and "Dataset" in df.columns else ["All"]
+        modes = ["All", "baseline", "scaledown"]
+        
+        return (
+            leaderboard, 
+            comparison, 
+            "✓ Data refreshed successfully",
+            gr.Dropdown(choices=models, value="All"),
+            gr.Dropdown(choices=datasets, value="All"),
+            gr.Dropdown(choices=modes, value="All")
+        )
     except Exception as e:
         error_msg = f"Error refreshing data: {str(e)}"
-        return None, None, error_msg
+        # Return current dropdowns unchanged on error
+        return (
+            None, 
+            None, 
+            error_msg,
+            gr.Dropdown(choices=model_filter.choices if hasattr(model_filter, 'choices') else ["All"]),
+            gr.Dropdown(choices=dataset_filter.choices if hasattr(dataset_filter, 'choices') else ["All"]),
+            gr.Dropdown(choices=mode_filter.choices if hasattr(mode_filter, 'choices') else ["All"])
+        )
 
 
 def init_leaderboard(df: pd.DataFrame, columns: list):
@@ -242,11 +268,11 @@ def create_demo():
                         elem_id="citation-button",
                     )
         
-        # Wire up refresh button
+        # Wire up refresh button to update everything including dropdowns
         refresh_btn.click(
             fn=refresh_data,
-            inputs=None,
-            outputs=[leaderboard, comparison_table, refresh_status],
+            inputs=[model_filter, dataset_filter, mode_filter],
+            outputs=[leaderboard, comparison_table, refresh_status, model_filter, dataset_filter, mode_filter],
         )
     
     return demo

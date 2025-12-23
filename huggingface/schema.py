@@ -10,14 +10,17 @@ from datetime import datetime
 def extract_experiment_metadata(experiment_id: str) -> Dict[str, str]:
     """Extract metadata from experiment ID.
     
-    Experiment IDs follow pattern: {dataset}_{mode}_{model}_{timestamp}
-    Example: hotpotqa_baseline_openai_20251215_130236
+    Experiment IDs follow patterns:
+    - Standard: {dataset}_{mode}_{model}_{timestamp}
+      Example: hotpotqa_baseline_openai_20251215_130236
+    - LongBench: {dataset}_{task}_{mode}_{model}_{timestamp}
+      Example: longbench_narrativeqa_baseline_openai_20251223_134109
     
     Args:
         experiment_id: Full experiment identifier.
         
     Returns:
-        Dictionary with dataset, mode, model_short, and timestamp.
+        Dictionary with dataset, mode, task, model_short, and timestamp.
     """
     parts = experiment_id.split("_")
     
@@ -25,26 +28,30 @@ def extract_experiment_metadata(experiment_id: str) -> Dict[str, str]:
         return {
             "dataset": "unknown",
             "mode": "unknown",
+            "task": "",
             "model_short": "unknown",
             "timestamp": ""
         }
     
-    # Parse standard format: dataset_mode_model_timestamp
+    # Timestamp is always last 2 parts (YYYYMMDD_HHMMSS)
+    timestamp = f"{parts[-2]}_{parts[-1]}"
     dataset = parts[0]
-    mode = parts[1]
     
-    # Model and timestamp are the remaining parts
-    # Timestamp is last 2 parts (YYYYMMDD_HHMMSS)
-    if len(parts) >= 4:
-        timestamp = f"{parts[-2]}_{parts[-1]}"
-        model_short = "_".join(parts[2:-2])
+    # Detect LongBench pattern: longbench_{task}_{mode}_{model}_{timestamp}
+    if dataset == "longbench" and len(parts) >= 6:
+        task = parts[1]
+        mode = parts[2]
+        model_short = "_".join(parts[3:-2])
     else:
-        timestamp = ""
-        model_short = "_".join(parts[2:])
+        # Standard pattern: {dataset}_{mode}_{model}_{timestamp}
+        task = ""
+        mode = parts[1]
+        model_short = "_".join(parts[2:-2])
     
     return {
         "dataset": dataset,
         "mode": mode,
+        "task": task,
         "model_short": model_short,
         "timestamp": timestamp
     }
@@ -57,6 +64,7 @@ def summary_to_leaderboard_row(summary: Dict[str, Any]) -> Dict[str, Any]:
     1. Extracting all metric means from the metrics dict
     2. Preserving standard fields (model, dataset, task, cost, latency, tokens)
     3. Supporting optional fields (compression_ratio, etc.)
+    4. Handling missing fields gracefully for backwards compatibility
     
     Args:
         summary: Summary dictionary from aggregation.py output.
@@ -68,12 +76,13 @@ def summary_to_leaderboard_row(summary: Dict[str, Any]) -> Dict[str, Any]:
     metadata = extract_experiment_metadata(experiment_id)
     
     # Base row with standard fields
+    # Prefer fields from summary, fall back to parsed metadata
     row = {
         "experiment_id": experiment_id,
         "model": summary.get("model", ""),
         "dataset": summary.get("dataset", metadata["dataset"]),
-        "mode": summary.get("mode", metadata["mode"]),
-        "task": summary.get("task", ""),
+        "mode": summary.get("mode", metadata["mode"]),  # Use summary mode first
+        "task": summary.get("task", metadata["task"]),  # Use summary task first
         "n_examples": summary.get("n_examples", 0),
         "timestamp": metadata["timestamp"],
     }
@@ -112,9 +121,19 @@ def summary_to_leaderboard_row(summary: Dict[str, Any]) -> Dict[str, Any]:
         row["total_cost_usd"] = 0.0
         row["avg_cost_usd"] = 0.0
     
-    # Add compression ratio from summary (now calculated in runner)
-    # Display as-is: "N/A" for baseline, "auto" or integer for scaledown
-    row["compression_ratio"] = summary.get("compression_ratio", "N/A")
+    # Add compression ratio from summary
+    # For backwards compatibility: if not present, infer from mode
+    if "compression_ratio" in summary:
+        row["compression_ratio"] = summary["compression_ratio"]
+    else:
+        # Old results without compression_ratio field
+        mode = row["mode"]
+        if mode == "baseline":
+            row["compression_ratio"] = "N/A"
+        elif mode == "scaledown":
+            row["compression_ratio"] = "auto"  # Default assumption
+        else:
+            row["compression_ratio"] = "N/A"
     
     # Add upload timestamp
     row["uploaded_at"] = datetime.now().isoformat()

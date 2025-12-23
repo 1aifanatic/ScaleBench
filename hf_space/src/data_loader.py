@@ -160,11 +160,15 @@ def get_comparison_df(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     
     # Convert display names back to internal names for processing
-    display_to_internal = {v: k for k, v in _get_column_rename_map(df.columns).items()}
-    # Also keep columns that weren't renamed
+    # We need to build the reverse map from the full COLUMN_DISPLAY_NAMES mapping
+    from src.display.columns import COLUMN_DISPLAY_NAMES
+    
+    display_to_internal = {v: k for k, v in COLUMN_DISPLAY_NAMES.items()}
+    # Also keep columns that weren't renamed (fallback to lowercase)
     for col in df.columns:
         if col not in display_to_internal:
-            display_to_internal[col] = col
+            # Try lowercase version (for columns not in explicit mapping)
+            display_to_internal[col] = col.lower().replace(" ", "_").replace("(", "").replace(")", "")
     
     df_internal = df.rename(columns=display_to_internal)
     

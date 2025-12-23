@@ -143,11 +143,17 @@ def main():
                     if _should_upload_to_hf(args, config):
                         _upload_to_hf(summary_json_path, args.hf_token, exp.id)
                 else:
-                    # Single-task: need to aggregate from JSONL
+                    # Single-task: aggregate from JSONL (now includes task/mode/compression_ratio)
                     progress.update(task, description=f"[green]✓[/green] {exp.id}")
                     
                     raw_jsonl = Path(result["raw_output_file"])
                     aggregated = aggregate_from_jsonl(raw_jsonl)
+                    
+                    # Add compression_ratio from config if not already present
+                    if "compression_ratio" not in aggregated or aggregated["compression_ratio"] == "auto":
+                        from evaluation.runner import _get_compression_ratio
+                        aggregated["compression_ratio"] = _get_compression_ratio(exp)
+                    
                     results.append(aggregated)
                     
                     # Extract timestamp from filename (format: {exp_id}_{timestamp}.jsonl)
