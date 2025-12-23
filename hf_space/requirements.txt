@@ -1,3 +1,3 @@
-gradio>=4.0.0
-huggingface_hub>=0.20.0
-pandas
+gradio==6.2.0
+huggingface_hub==1.2.3
+pandas==2.3.3
