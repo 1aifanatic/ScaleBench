@@ -26,11 +26,33 @@ from src.data_loader import get_leaderboard_df, get_comparison_df
 from src.envs import API, RESULTS_DATASET, TOKEN
 
 
-def load_data():
-    """Load data and build column configuration."""
-    df, metric_cols = get_leaderboard_df()
+def load_data(force_refresh: bool = False):
+    """Load data and build column configuration.
+    
+    Args:
+        force_refresh: If True, bypass cache and fetch fresh data from HF.
+    """
+    df, metric_cols = get_leaderboard_df(force_download=force_refresh)
     columns = build_column_config(metric_cols)
     return df, columns, metric_cols
+
+
+def refresh_data():
+    """Refresh data from HuggingFace dataset.
+    
+    Forces re-download bypassing cache.
+    
+    Returns:
+        Tuple of (main_leaderboard, comparison_table, status_message)
+    """
+    try:
+        df, columns, _ = load_data(force_refresh=True)
+        leaderboard = init_leaderboard(df, columns)
+        comparison = init_comparison_table(df)
+        return leaderboard, comparison, "✓ Data refreshed successfully"
+    except Exception as e:
+        error_msg = f"Error refreshing data: {str(e)}"
+        return None, None, error_msg
 
 
 def init_leaderboard(df: pd.DataFrame, columns: list):
@@ -119,6 +141,17 @@ def create_demo():
         gr.HTML(TITLE)
         gr.Markdown(INTRODUCTION_TEXT, elem_classes="markdown-text")
         
+        # Refresh button at the top
+        with gr.Row():
+            refresh_btn = gr.Button("🔄 Refresh Data", variant="primary", size="sm")
+            refresh_status = gr.Textbox(
+                label="",
+                show_label=False,
+                interactive=False,
+                container=False,
+                visible=True,
+            )
+        
         with gr.Tabs(elem_classes="tab-buttons") as tabs:
             # Tab 1: All Results
             with gr.TabItem("All Results", elem_id="all-results-tab", id=0):
@@ -187,6 +220,13 @@ def create_demo():
                         lines=6,
                         elem_id="citation-button",
                     )
+        
+        # Wire up refresh button
+        refresh_btn.click(
+            fn=refresh_data,
+            inputs=None,
+            outputs=[leaderboard, comparison_table, refresh_status],
+        )
     
     return demo
 

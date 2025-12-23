@@ -14,8 +14,11 @@ from huggingface_hub import hf_hub_download, list_repo_files
 from src.envs import TOKEN, RESULTS_DATASET, RESULTS_CACHE_PATH
 
 
-def download_results() -> List[Dict[str, Any]]:
+def download_results(force_download: bool = False) -> List[Dict[str, Any]]:
     """Download all result JSONs from HuggingFace dataset.
+    
+    Args:
+        force_download: If True, bypass cache and re-download files.
     
     Returns:
         List of result dictionaries.
@@ -35,6 +38,7 @@ def download_results() -> List[Dict[str, Any]]:
                     repo_type="dataset",
                     token=TOKEN,
                     local_dir=RESULTS_CACHE_PATH,
+                    force_download=force_download,  # Bypass cache when needed
                 )
                 with open(local_path, "r") as f:
                     data = json.load(f)
@@ -86,13 +90,16 @@ def results_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFrame:
     return df
 
 
-def get_leaderboard_df() -> Tuple[pd.DataFrame, Set[str]]:
+def get_leaderboard_df(force_download: bool = False) -> Tuple[pd.DataFrame, Set[str]]:
     """Get main leaderboard DataFrame.
+    
+    Args:
+        force_download: If True, bypass cache and re-download files.
     
     Returns:
         Tuple of (DataFrame, set of metric column names).
     """
-    results = download_results()
+    results = download_results(force_download=force_download)
     df = results_to_dataframe(results)
     metric_cols = discover_metric_columns(results)
     
