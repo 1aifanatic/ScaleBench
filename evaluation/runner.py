@@ -2,7 +2,7 @@
 import json
 import time
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 from core.config import ExperimentConfig
@@ -174,11 +174,14 @@ def _aggregate_results(results: List[Dict[str, Any]], config: ExperimentConfig) 
             "experiment_id": config.id,
             "model": config.model.name,
             "dataset": config.dataset.name,
+            "task": config.task.name,
+            "mode": config.model.mode,
             "n_examples": 0,
             "metrics": {},
             "latency_ms": 0.0,
             "input_tokens": 0.0,
             "output_tokens": 0.0,
+            "compression_ratio": _get_compression_ratio(config),
         }
     
     n = len(results)
@@ -205,6 +208,8 @@ def _aggregate_results(results: List[Dict[str, Any]], config: ExperimentConfig) 
         "experiment_id": config.id,
         "model": config.model.name,
         "dataset": config.dataset.name,
+        "task": config.task.name,
+        "mode": config.model.mode,
         "n_examples": n,
         "metrics": metric_means,
         "avg_latency_ms": total_latency / n,
@@ -212,7 +217,32 @@ def _aggregate_results(results: List[Dict[str, Any]], config: ExperimentConfig) 
         "avg_output_tokens": total_output_tokens / n,
         "total_cost_usd": total_cost,
         "avg_cost_usd": avg_cost,
+        "compression_ratio": _get_compression_ratio(config),
     }
+
+
+def _get_compression_ratio(config: ExperimentConfig) -> Optional[str]:
+    """Get compression ratio from config.
+    
+    Args:
+        config: ExperimentConfig
+        
+    Returns:
+        Compression ratio: N/A for baseline, "auto" or integer (1-10) for scaledown
+    """
+    if config.model.mode == "baseline":
+        return "N/A"
+    elif config.model.mode == "scaledown" and config.model.scaledown:
+        rate = config.model.scaledown.get("rate", "auto")
+        if rate == "auto":
+            return "auto"
+        else:
+            # Convert to integer if it's a numeric rate
+            try:
+                return str(int(float(rate)))
+            except (ValueError, TypeError):
+                return "auto"
+    return "N/A"
 
 
 def _run_multi_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:

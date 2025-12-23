@@ -76,18 +76,46 @@ def results_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFrame:
         results: List of flattened result dictionaries.
         
     Returns:
-        DataFrame with all results.
+        DataFrame with all results (using internal column names).
     """
     if not results:
         return pd.DataFrame()
     
     df = pd.DataFrame.from_records(results)
     
+    # Remove unwanted columns
+    columns_to_remove = ["_original_summary", "uploaded_at"]
+    df = df.drop(columns=[col for col in columns_to_remove if col in df.columns])
+    
+    # Convert timestamp to human-readable format (UTC)
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], format="%Y%m%d_%H%M%S", utc=True).dt.strftime("%Y-%m-%d %H:%M UTC")
+    
     # Round numeric columns
     numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
     df[numeric_cols] = df[numeric_cols].round(4)
     
     return df
+
+
+def _get_column_rename_map(columns) -> dict:
+    """Get mapping of internal column names to display names.
+    
+    Args:
+        columns: List of column names from dataframe.
+        
+    Returns:
+        Dictionary mapping internal names to display names.
+    """
+    from src.display.columns import get_display_name
+    
+    rename_map = {}
+    for col in columns:
+        display = get_display_name(col)
+        if display != col:  # Only rename if different
+            rename_map[col] = display
+    
+    return rename_map
 
 
 def get_leaderboard_df(force_download: bool = False) -> Tuple[pd.DataFrame, Set[str]]:
@@ -105,10 +133,14 @@ def get_leaderboard_df(force_download: bool = False) -> Tuple[pd.DataFrame, Set[
     
     if not df.empty:
         # Sort by first available metric or timestamp
+        # Use internal column names for sorting before renaming
         if "exact_match_mean" in df.columns:
             df = df.sort_values(by="exact_match_mean", ascending=False)
         elif "f1_mean" in df.columns:
             df = df.sort_values(by="f1_mean", ascending=False)
+    
+    # Rename columns to display names
+    df = df.rename(columns=_get_column_rename_map(df.columns))
     
     return df, metric_cols
 
@@ -119,17 +151,29 @@ def get_comparison_df(df: pd.DataFrame) -> pd.DataFrame:
     Pivots data to show side-by-side comparison for same model+dataset.
     
     Args:
-        df: Main leaderboard DataFrame.
+        df: Main leaderboard DataFrame (with display column names).
         
     Returns:
-        Comparison DataFrame with delta columns.
+        Comparison DataFrame with delta columns and friendly names.
     """
-    if df.empty or "mode" not in df.columns:
+    if df.empty:
+        return pd.DataFrame()
+    
+    # Convert display names back to internal names for processing
+    display_to_internal = {v: k for k, v in _get_column_rename_map(df.columns).items()}
+    # Also keep columns that weren't renamed
+    for col in df.columns:
+        if col not in display_to_internal:
+            display_to_internal[col] = col
+    
+    df_internal = df.rename(columns=display_to_internal)
+    
+    if "mode" not in df_internal.columns:
         return pd.DataFrame()
     
     # Group by model+dataset, pivot on mode
-    baseline = df[df["mode"] == "baseline"].copy()
-    scaledown = df[df["mode"] == "scaledown"].copy()
+    baseline = df_internal[df_internal["mode"] == "baseline"].copy()
+    scaledown = df_internal[df_internal["mode"] == "scaledown"].copy()
     
     if baseline.empty or scaledown.empty:
         return pd.DataFrame()
@@ -143,7 +187,7 @@ def get_comparison_df(df: pd.DataFrame) -> pd.DataFrame:
         how="inner"
     )
     
-    # Calculate deltas for metric columns
+    # Calculate deltas for metric columns (rounded to 4 decimals)
     metric_cols = [c for c in baseline.columns if c.endswith("_mean")]
     for col in metric_cols:
         baseline_col = f"{col}_baseline"
@@ -151,7 +195,7 @@ def get_comparison_df(df: pd.DataFrame) -> pd.DataFrame:
         if baseline_col in comparison.columns and scaledown_col in comparison.columns:
             comparison[f"{col}_delta"] = (
                 comparison[scaledown_col] - comparison[baseline_col]
-            )
+            ).round(4)
     
     # Calculate cost savings
     if "avg_cost_usd_baseline" in comparison.columns and "avg_cost_usd_scaledown" in comparison.columns:
@@ -159,5 +203,32 @@ def get_comparison_df(df: pd.DataFrame) -> pd.DataFrame:
             (comparison["avg_cost_usd_baseline"] - comparison["avg_cost_usd_scaledown"]) 
             / comparison["avg_cost_usd_baseline"] * 100
         ).round(2)
+    
+    # Rename columns to display names
+    from src.display.columns import get_display_name
+    
+    rename_map = {}
+    for col in comparison.columns:
+        # Handle suffixed columns
+        if col.endswith("_baseline"):
+            base = col.replace("_baseline", "")
+            display = get_display_name(base)
+            rename_map[col] = f"{display} (Baseline)"
+        elif col.endswith("_scaledown"):
+            base = col.replace("_scaledown", "")
+            display = get_display_name(base)
+            rename_map[col] = f"{display} (ScaleDown)"
+        elif col.endswith("_delta"):
+            base = col.replace("_delta", "")
+            display = get_display_name(base)
+            rename_map[col] = f"{display} (Δ)"
+        elif col == "cost_savings_pct":
+            rename_map[col] = "Cost Savings (%)"
+        else:
+            display = get_display_name(col)
+            if display != col:
+                rename_map[col] = display
+    
+    comparison = comparison.rename(columns=rename_map)
     
     return comparison

@@ -72,16 +72,11 @@ def summary_to_leaderboard_row(summary: Dict[str, Any]) -> Dict[str, Any]:
         "experiment_id": experiment_id,
         "model": summary.get("model", ""),
         "dataset": summary.get("dataset", metadata["dataset"]),
-        "mode": metadata["mode"],
+        "mode": summary.get("mode", metadata["mode"]),
+        "task": summary.get("task", ""),
         "n_examples": summary.get("n_examples", 0),
         "timestamp": metadata["timestamp"],
     }
-    
-    # Add task if multi-task
-    if summary.get("is_multi_task"):
-        row["task"] = "multi_task"
-    else:
-        row["task"] = summary.get("task", "")
     
     # Extract all metric means dynamically
     metrics = summary.get("metrics", {})
@@ -117,14 +112,9 @@ def summary_to_leaderboard_row(summary: Dict[str, Any]) -> Dict[str, Any]:
         row["total_cost_usd"] = 0.0
         row["avg_cost_usd"] = 0.0
     
-    # Calculate compression ratio if scaledown mode
-    if metadata["mode"] == "scaledown":
-        # Compression ratio = original_tokens / compressed_tokens
-        # For scaledown, input tokens are already compressed
-        # We'd need baseline comparison, but for now just mark it
-        row["compression_ratio"] = None
-    else:
-        row["compression_ratio"] = 1.0
+    # Add compression ratio from summary (now calculated in runner)
+    # Display as-is: "N/A" for baseline, "auto" or integer for scaledown
+    row["compression_ratio"] = summary.get("compression_ratio", "N/A")
     
     # Add upload timestamp
     row["uploaded_at"] = datetime.now().isoformat()

@@ -90,18 +90,17 @@ def init_comparison_table(df: pd.DataFrame):
             interactive=False,
         )
     
-    # Select key comparison columns
-    display_cols = ["model", "dataset"]
+    # Select key columns for display
+    # Start with model and dataset
+    display_cols = []
+    for col in comparison_df.columns:
+        if col in ["Model", "Dataset"]:
+            display_cols.append(col)
     
     # Add metric columns (baseline, scaledown, delta)
     for col in comparison_df.columns:
-        if col.endswith("_baseline") or col.endswith("_scaledown") or col.endswith("_delta"):
-            if "_mean_" in col or col.endswith("_mean_baseline") or col.endswith("_mean_scaledown") or col.endswith("_mean_delta"):
-                display_cols.append(col)
-    
-    # Add cost savings
-    if "cost_savings_pct" in comparison_df.columns:
-        display_cols.append("cost_savings_pct")
+        if "(Baseline)" in col or "(ScaleDown)" in col or "(Δ)" in col or "Cost Savings" in col:
+            display_cols.append(col)
     
     available_cols = [c for c in display_cols if c in comparison_df.columns]
     display_df = comparison_df[available_cols] if available_cols else comparison_df
@@ -114,15 +113,26 @@ def init_comparison_table(df: pd.DataFrame):
 
 
 def filter_dataframe(df: pd.DataFrame, model: str, dataset: str, mode: str) -> pd.DataFrame:
-    """Filter dataframe based on selections."""
+    """Filter dataframe based on selections.
+    
+    Args:
+        df: DataFrame with display column names.
+        model: Model filter value.
+        dataset: Dataset filter value.
+        mode: Mode filter value.
+        
+    Returns:
+        Filtered DataFrame.
+    """
     filtered = df.copy()
     
-    if model and model != "All":
-        filtered = filtered[filtered["model"] == model]
-    if dataset and dataset != "All":
-        filtered = filtered[filtered["dataset"] == dataset]
-    if mode and mode != "All":
-        filtered = filtered[filtered["mode"] == mode]
+    # Use display column names
+    if model and model != "All" and "Model" in filtered.columns:
+        filtered = filtered[filtered["Model"] == model]
+    if dataset and dataset != "All" and "Dataset" in filtered.columns:
+        filtered = filtered[filtered["Dataset"] == dataset]
+    if mode and mode != "All" and "Mode" in filtered.columns:
+        filtered = filtered[filtered["Mode"] == mode]
     
     return filtered
 
@@ -132,9 +142,9 @@ def create_demo():
     # Load data
     df, columns, metric_cols = load_data()
     
-    # Get unique values for filters
-    models = ["All"] + sorted(df["model"].unique().tolist()) if not df.empty and "model" in df.columns else ["All"]
-    datasets = ["All"] + sorted(df["dataset"].unique().tolist()) if not df.empty and "dataset" in df.columns else ["All"]
+    # Get unique values for filters (using display column names)
+    models = ["All"] + sorted(df["Model"].unique().tolist()) if not df.empty and "Model" in df.columns else ["All"]
+    datasets = ["All"] + sorted(df["Dataset"].unique().tolist()) if not df.empty and "Dataset" in df.columns else ["All"]
     modes = ["All", "baseline", "scaledown"]
     
     with gr.Blocks(css=custom_css) as demo:
@@ -206,6 +216,17 @@ def create_demo():
                 ### Side-by-side comparison of baseline and ScaleDown results
                 
                 Shows paired experiments with the same model and dataset, comparing quality metrics and cost savings.
+                
+                **How to read the delta columns:**
+                - **Delta** = ScaleDown value - Baseline value
+                - **Positive delta**: ScaleDown performs better (e.g., +0.05 for F1 means 5% improvement)
+                - **Negative delta**: ScaleDown performs worse (e.g., -0.02 for F1 means 2% degradation)
+                - **Cost Savings %**: Percentage reduction in cost when using ScaleDown
+                
+                **Expected results:**
+                - Token savings: 80-90% reduction in input tokens
+                - Quality metrics: Should be similar (±5-10% delta is acceptable)
+                - Cost savings: Significant reduction proportional to token savings
                 """)
                 comparison_table = init_comparison_table(df)
             
