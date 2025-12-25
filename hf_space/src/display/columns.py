@@ -45,6 +45,12 @@ COLUMN_DISPLAY_NAMES = {
     # Compression columns
     "compression_ratio": "Compression Ratio",
     
+    # Set metrics (ETHIC dataset)
+    "set_exact_match": "Set EM",
+    "set_precision": "Set Precision",
+    "set_recall": "Set Recall",
+    "set_f1": "Set F1",
+    
     # Metadata columns
     "experiment_id": "Experiment ID",
     "timestamp": "Timestamp",

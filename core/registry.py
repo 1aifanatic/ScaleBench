@@ -11,6 +11,7 @@ from models.base import ModelClient, PricingInfo, DEFAULT_MODEL_PRICING
 # Import datasets
 from dataset.hotpotqa import HotpotQADataset
 from dataset.longbench import LongBenchDataset
+from dataset.ethic import ETHICDataset
 from dataset.base import Dataset
 
 # Import tasks
@@ -20,6 +21,12 @@ from tasks.base import Task
 # Import metrics
 from metrics.classification import compute_exact_match, compute_f1
 from metrics.generation import compute_bertscore
+from metrics.set_metrics import (
+    compute_set_exact_match,
+    compute_set_precision,
+    compute_set_recall,
+    compute_set_f1,
+)
 
 
 # ============================================================================
@@ -34,6 +41,7 @@ MODEL_REGISTRY: Dict[str, type] = {
 DATASET_REGISTRY: Dict[str, type] = {
     "hotpotqa": HotpotQADataset,
     "longbench": LongBenchDataset,
+    "ethic": ETHICDataset,
 }
 
 TASK_REGISTRY: Dict[str, type] = {
@@ -44,6 +52,10 @@ METRIC_REGISTRY: Dict[str, Callable] = {
     "exact_match": compute_exact_match,
     "f1": compute_f1,
     "bertscore": compute_bertscore,
+    "set_exact_match": compute_set_exact_match,
+    "set_precision": compute_set_precision,
+    "set_recall": compute_set_recall,
+    "set_f1": compute_set_f1,
 }
 
 
@@ -128,6 +140,11 @@ def get_dataset(config: DatasetConfig) -> Dataset:
     if dataset_name == "longbench":
         task = config.task or None  # Default to first task; None will be handled in runner
         return dataset_class(name=config.name, task=task)
+    
+    # Handle ETHIC: use subset from name or default to Recalling
+    if dataset_name == "ethic":
+        ethic_subset = subset if subset else "Recalling"
+        return dataset_class(name=config.name, subset=ethic_subset)
     
     # Handle other datasets: use subset if provided
     if subset:

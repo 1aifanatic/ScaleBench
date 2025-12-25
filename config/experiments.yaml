@@ -1,6 +1,8 @@
 # Benchmark experiments configuration
 # Each experiment specifies model, dataset, task, and optional metrics.
 
+upload_to_hf: true
+
 experiments:
   # HotpotQA baseline and ScaleDown experiments
   - id: hotpotqa_baseline_openai
@@ -72,3 +74,42 @@ experiments:
     metrics:
       - f1
       - bertscore
+
+  # ETHIC Recalling baseline
+  - id: ethic_recalling_baseline_openai
+    model:
+      name: openai:gpt-4o
+      mode: baseline
+    dataset:
+      name: ethic:Recalling
+      split: test
+      num_examples: 10
+      seed: 42
+    task:
+      name: rag_qa
+    metrics:
+      - set_exact_match
+      - set_precision
+      - set_recall
+      - set_f1
+
+  # ETHIC Recalling scaledown
+  - id: ethic_recalling_scaledown_openai
+    model:
+      name: openai:gpt-4o
+      mode: scaledown
+      scaledown:
+        rate: auto
+        compression_model: gemini-2.5-flash
+    dataset:
+      name: ethic:Recalling
+      split: test
+      num_examples: 10
+      seed: 42
+    task:
+      name: rag_qa
+    metrics:
+      - set_exact_match
+      - set_precision
+      - set_recall
+      - set_f1
