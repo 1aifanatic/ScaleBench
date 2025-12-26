@@ -287,6 +287,74 @@ metrics:
 
 **Note**: BERTScore is more robust to paraphrasing than exact match or token F1, making it ideal for long-context QA where answers may be expressed differently.
 
+## MLflow Integration
+
+Optional MLflow integration provides experiment tracking, tracing, and visibility into benchmark runs.
+
+### Quick Start
+
+1. **Start MLflow server** (in a separate terminal):
+   ```bash
+   mlflow server
+   ```
+
+2. **Run benchmarks with MLflow enabled**:
+   ```bash
+   # Via CLI flag
+   python run_benchmarks.py --mlflow
+
+   # Or enable in config (mlflow.enabled: true)
+   python run_benchmarks.py
+   ```
+
+3. **View results** at http://localhost:5000
+
+### Configuration
+
+Enable via `config/experiments.yaml`:
+```yaml
+mlflow:
+  enabled: true
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "scaledown-benchmarking"
+```
+
+Or via CLI flags:
+- `--mlflow` - Enable MLflow (overrides config)
+- `--no-mlflow` - Disable MLflow (overrides config)
+- `--mlflow-uri` - Custom tracking URI
+
+### What Gets Logged
+
+**Traces:**
+- Per-example execution with full prompts/contexts
+- Auto-traced OpenAI and Gemini API calls
+- Manual span for ScaleDown compression (inputs, outputs, ratio)
+
+**Parameters:**
+- Experiment ID, dataset, model, mode
+- ScaleDown compression rate and model (if applicable)
+- Metrics being evaluated
+
+**Metrics:**
+- Aggregated F1, exact match, latency, token counts
+- Cost statistics (total and average)
+- Compression ratio (for ScaleDown mode)
+
+**Artifacts:**
+- Raw JSONL result files
+- Summary JSON/CSV files
+
+**Tags:**
+- Dataset name, mode (baseline/scaledown), model provider
+
+### MLflow UI Features
+
+- **Traces tab**: View per-example execution traces with full context
+- **Runs**: Compare experiments side-by-side
+- **Artifacts**: Download raw results directly
+- **Metrics**: Visualize performance across runs
+
 ## Project Structure
 
 ```

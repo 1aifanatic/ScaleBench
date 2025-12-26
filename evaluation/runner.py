@@ -9,6 +9,7 @@ from core.config import ExperimentConfig
 from core.registry import get_model_client, get_dataset, get_task, get_metrics
 from models.base import GenerationInput
 from dataset.longbench import VALID_TASKS as LONGBENCH_TASKS
+import utils.mlflow_utils as mlflow_utils
 
 
 def run_experiment(config: ExperimentConfig) -> Dict[str, Any]:
@@ -29,10 +30,51 @@ def run_experiment(config: ExperimentConfig) -> Dict[str, Any]:
         config.dataset.task is None
     )
     
-    if is_longbench_multi:
-        return _run_multi_task_experiment(config)
-    else:
-        return _run_single_task_experiment(config)
+    # Prepare MLflow run tags
+    tags = {
+        "dataset": config.dataset.name,
+        "mode": config.model.mode,
+        "model_provider": config.model.name.split(":")[0] if ":" in config.model.name else "unknown",
+    }
+    
+    # Wrap experiment execution with MLflow run
+    with mlflow_utils.start_run(run_name=config.id, tags=tags):
+        # Log experiment parameters
+        params = {
+            "experiment_id": config.id,
+            "dataset": config.dataset.name,
+            "dataset_split": config.dataset.split,
+            "num_examples": str(config.dataset.num_examples or "all"),
+            "seed": config.dataset.seed,
+            "model": config.model.name,
+            "mode": config.model.mode,
+            "task": config.task.name,
+            "metrics": ",".join(config.metrics) if config.metrics else "",
+        }
+        
+        # Add dataset task if LongBench
+        if config.dataset.task:
+            params["dataset_task"] = config.dataset.task
+        
+        # Add ScaleDown params if applicable
+        if config.model.mode == "scaledown" and config.model.scaledown:
+            params["compression_rate"] = str(config.model.scaledown.get("rate", "auto"))
+            params["compression_model"] = config.model.scaledown.get("compression_model", "gemini-2.5-flash")
+        
+        mlflow_utils.log_params(params)
+        
+        if is_longbench_multi:
+            result = _run_multi_task_experiment(config)
+        else:
+            result = _run_single_task_experiment(config)
+        
+        # Log aggregated metrics to MLflow
+        _log_mlflow_metrics(result, config)
+        
+        # Log artifacts
+        _log_mlflow_artifacts(result)
+        
+        return result
 
 
 def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
@@ -332,3 +374,68 @@ def _run_multi_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
         "per_task": per_task_results,
         "raw_output_files": all_raw_files,
     }
+
+
+def _log_mlflow_metrics(result: Dict[str, Any], config: ExperimentConfig) -> None:
+    """Log aggregated metrics to MLflow.
+    
+    Args:
+        result: Aggregated results dictionary.
+        config: ExperimentConfig for metadata.
+    """
+    if not mlflow_utils.is_mlflow_enabled():
+        return
+    
+    metrics = {}
+    
+    # Log metric means
+    for metric_name, value in result.get("metrics", {}).items():
+        if isinstance(value, dict):
+            # New format with mean/std
+            metrics[f"{metric_name}_mean"] = value.get("mean", 0.0)
+        else:
+            # Old format (direct value)
+            metrics[metric_name] = value
+    
+    # Log latency
+    if "latency_ms" in result:
+        metrics["latency_mean_ms"] = result["latency_ms"].get("mean", 0.0)
+    elif "avg_latency_ms" in result:
+        metrics["latency_mean_ms"] = result["avg_latency_ms"]
+    
+    # Log tokens
+    if "tokens" in result:
+        metrics["avg_input_tokens"] = result["tokens"].get("avg_input_tokens", 0.0)
+        metrics["avg_output_tokens"] = result["tokens"].get("avg_output_tokens", 0.0)
+    else:
+        metrics["avg_input_tokens"] = result.get("avg_input_tokens", 0.0)
+        metrics["avg_output_tokens"] = result.get("avg_output_tokens", 0.0)
+    
+    # Log cost
+    if result.get("avg_cost_usd") is not None:
+        metrics["avg_cost_usd"] = result["avg_cost_usd"]
+    if result.get("total_cost_usd") is not None:
+        metrics["total_cost_usd"] = result["total_cost_usd"]
+    
+    # Log number of examples
+    metrics["n_examples"] = result.get("n_examples", 0)
+    
+    mlflow_utils.log_metrics(metrics)
+
+
+def _log_mlflow_artifacts(result: Dict[str, Any]) -> None:
+    """Log result files as MLflow artifacts.
+    
+    Args:
+        result: Result dictionary containing file paths.
+    """
+    if not mlflow_utils.is_mlflow_enabled():
+        return
+    
+    # Log raw output file(s)
+    if "raw_output_file" in result:
+        mlflow_utils.log_artifact(result["raw_output_file"])
+    
+    if "raw_output_files" in result:
+        for file_path in result["raw_output_files"]:
+            mlflow_utils.log_artifact(file_path)
