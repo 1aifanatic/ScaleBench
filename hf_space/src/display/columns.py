@@ -45,6 +45,12 @@ COLUMN_DISPLAY_NAMES = {
     # Compression columns
     "compression_ratio": "Compression Ratio",
     
+    # Set metrics (ETHIC dataset)
+    "set_exact_match": "Set EM",
+    "set_precision": "Set Precision",
+    "set_recall": "Set Recall",
+    "set_f1": "Set F1",
+    
     # Metadata columns
     "experiment_id": "Experiment ID",
     "timestamp": "Timestamp",
@@ -93,7 +99,6 @@ def get_display_name(column_name: str) -> str:
 FIXED_COLUMNS = [
     ColumnConfig("model", get_display_name("model"), "str", displayed_by_default=True, never_hidden=True),
     ColumnConfig("dataset", get_display_name("dataset"), "str", displayed_by_default=True, never_hidden=True),
-    # Removed task column since it's always empty
     ColumnConfig("mode", get_display_name("mode"), "str", displayed_by_default=True),
     ColumnConfig("n_examples", get_display_name("n_examples"), "number", displayed_by_default=True),
 ]

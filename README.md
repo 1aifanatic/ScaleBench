@@ -6,9 +6,9 @@ Clean, modular, reproducible benchmarking framework to evaluate ScaleDown's cont
 
 This framework evaluates **accuracy**, **latency**, and **cost** when using ScaleDown compression vs. baseline LLMs on QA tasks with long contexts. Currently supports:
 
-- **Datasets**: HotpotQA (multi-hop QA), LongBench (long-context QA with 4 tasks)
+- **Datasets**: HotpotQA (multi-hop QA), LongBench (long-context QA with 4 tasks), ETHIC (long-document list extraction)
 - **Models**: OpenAI, Gemini
-- **Metrics**: Exact Match, Token-level F1, BERTScore (semantic similarity)
+- **Metrics**: Exact Match, Token-level F1, BERTScore, Set Precision/Recall/F1 (for list outputs)
 - **Tasks**: RAG-style QA with context compression
 
 ## Setup
@@ -298,7 +298,8 @@ metrics:
 ├── dataset/
 │   ├── base.py                # Dataset ABC
 │   ├── hotpotqa.py            # HotpotQA loader
-│   └── longbench.py           # LongBench loader (4 QA tasks)
+│   ├── longbench.py           # LongBench loader (4 QA tasks)
+│   └── ethic.py               # ETHIC loader (3 list extraction subsets)
 ├── tasks/
 │   ├── base.py                # Task ABC with normalization
 │   └── rag_task.py            # RAG QA task with prompt formatting
@@ -309,7 +310,8 @@ metrics:
 │   └── scaledown_client.py    # ScaleDown compression wrapper
 ├── metrics/
 │   ├── classification.py      # Exact match and F1 metrics
-│   └── generation.py          # BERTScore and generation metrics
+│   ├── generation.py          # BERTScore and generation metrics
+│   └── set_metrics.py         # Set-based metrics for list outputs
 ├── evaluation/
 │   ├── runner.py              # Experiment execution engine
 │   └── aggregation.py         # Results statistics computation
