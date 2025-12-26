@@ -17,12 +17,10 @@ from src.display.css import custom_css
 from src.display.columns import (
     build_column_config,
     get_column_names,
-    get_default_columns,
-    get_never_hidden_columns,
+
     get_column_types,
 )
-from src.display.formatting import styled_error
-from src.data_loader import get_leaderboard_df, get_comparison_df
+
 from src.envs import API, RESULTS_DATASET, TOKEN
 
 

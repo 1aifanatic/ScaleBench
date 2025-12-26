@@ -3,7 +3,7 @@
 This module handles conversion of benchmark summary JSONs to leaderboard-friendly
 flat row format. Designed to handle variable metrics dynamically.
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
 
 
