@@ -1,6 +1,6 @@
 """Set-based metrics for list/item evaluation (precision, recall, F1, exact match)."""
 from typing import List, Dict, Set, Callable, Optional
-import re
+
 
 
 def _parse_items(text: str) -> Set[str]:
@@ -185,19 +185,18 @@ def compute_set_f1(
     for pred, refs in zip(predictions, references):
         pred_set = _parse_items(pred)
         ref_set = _parse_reference(refs)
+        common = pred_set & ref_set
         
         # Compute precision
         if len(pred_set) == 0:
             precision = 0.0
         else:
-            common = pred_set & ref_set
             precision = len(common) / len(pred_set)
         
         # Compute recall
         if len(ref_set) == 0:
             recall = 0.0
         else:
-            common = pred_set & ref_set
             recall = len(common) / len(ref_set)
         
         # Compute F1
