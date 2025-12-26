@@ -12,4 +12,7 @@ CACHE_PATH = os.getenv("HF_HOME", ".")
 RESULTS_CACHE_PATH = os.path.join(CACHE_PATH, "results-cache")
 
 # API client
-API = HfApi(token=TOKEN)
+if TOKEN is not None:
+    API = HfApi(token=TOKEN)
+else:
+    API = HfApi()

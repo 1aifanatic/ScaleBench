@@ -4,8 +4,8 @@ Loads benchmark results from HuggingFace dataset and converts to DataFrames.
 Handles dynamic metrics by discovering columns at load time.
 """
 import json
-import os
-from pathlib import Path
+
+
 from typing import List, Dict, Any, Set, Tuple
 
 import pandas as pd
@@ -81,16 +81,25 @@ def results_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFrame:
     if not results:
         return pd.DataFrame()
     
-    df = pd.DataFrame.from_records(results)
-    
+    df = pd.DataFrame.from_records(results)    
     # Remove unwanted columns
     columns_to_remove = ["_original_summary", "uploaded_at"]
     df = df.drop(columns=[col for col in columns_to_remove if col in df.columns])
     
     # Convert timestamp to human-readable format (UTC)
     if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], format="%Y%m%d_%H%M%S", utc=True).dt.strftime("%Y-%m-%d %H:%M UTC")
-    
+        parsed_ts = pd.to_datetime(
+            df["timestamp"],
+            format="%Y%m%d_%H%M%S",
+            utc=True,
+            errors="coerce",
+        )
+        # Only overwrite successfully parsed timestamps; keep original values for malformed ones
+        valid_mask = parsed_ts.notna()
+        if not valid_mask.all():
+            num_failed = (~valid_mask).sum()
+            print(f"Warning: failed to parse {num_failed} timestamp value(s); leaving them unchanged.")
+        df.loc[valid_mask, "timestamp"] = parsed_ts[valid_mask].dt.strftime("%Y-%m-%d %H:%M UTC")
     # Round numeric columns
     numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
     df[numeric_cols] = df[numeric_cols].round(4)

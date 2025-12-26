@@ -7,10 +7,10 @@ import json
 import logging
 from pathlib import Path
 from typing import List, Optional, Set
-from datetime import datetime
 
-from huggingface_hub import HfApi, hf_hub_download
-from huggingface_hub.utils import RepositoryNotFoundError, EntryNotFoundError
+
+from huggingface_hub import HfApi
+from huggingface_hub.utils import RepositoryNotFoundError
 
 from huggingface.config import HF_TOKEN, HF_RESULTS_DATASET
 from huggingface.schema import summary_to_leaderboard_row, leaderboard_row_to_json
@@ -131,8 +131,7 @@ class ResultUploader:
         
         # Upload to dataset
         try:
-            with open(summary_path, "rb") as f:
-                content = json.dumps(result_json, indent=2).encode("utf-8")
+            content = json.dumps(result_json, indent=2).encode("utf-8")
             
             self.api.upload_file(
                 path_or_fileobj=content,
