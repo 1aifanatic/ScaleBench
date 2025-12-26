@@ -30,6 +30,11 @@ def aggregate_from_jsonl(jsonl_path: Path) -> Dict[str, Any]:
     model = results[0]["model"]
     n = len(results)
     
+    # Extract task, mode, compression_ratio if available (for backward compatibility)
+    dataset = results[0].get("dataset", "")
+    task = results[0].get("task", "")
+    mode = results[0].get("mode", "")
+    
     # Aggregate metrics
     metric_names = list(results[0]["metrics"].keys())
     metric_stats = {}
@@ -82,6 +87,9 @@ def aggregate_from_jsonl(jsonl_path: Path) -> Dict[str, Any]:
     aggregated = {
         "experiment_id": experiment_id,
         "model": model,
+        "dataset": dataset,
+        "task": task,
+        "mode": mode,
         "n_examples": n,
         "metrics": metric_stats,
         "latency_ms": latency_stats,
@@ -90,6 +98,14 @@ def aggregate_from_jsonl(jsonl_path: Path) -> Dict[str, Any]:
     
     if cost_stats:
         aggregated["cost"] = cost_stats
+    
+    # Add compression_ratio (infer from mode if not stored in results)
+    if mode == "baseline":
+        aggregated["compression_ratio"] = "N/A"
+    elif mode == "scaledown":
+        aggregated["compression_ratio"] = "auto"  # Default for old results
+    else:
+        aggregated["compression_ratio"] = "N/A"
     
     return aggregated
 

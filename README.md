@@ -385,3 +385,64 @@ locust -f load_testing/locustfile.py --users=200 --spawn-rate=50 --run-time=5m
 - **Web UI**: http://localhost:8089 (when running without `--headless`)
 
 **Full documentation:** See [load_testing/README.md](load_testing/README.md)
+---
+
+## HuggingFace Leaderboard Integration
+
+The framework includes full integration with HuggingFace for sharing and visualizing benchmark results.
+
+### Quick Start
+
+```bash
+# View leaderboard
+https://huggingface.co/spaces/scaledown/compression-leaderboard
+```
+
+### Features
+
+- **Automatic upload**: Run benchmarks with `--upload-hf` flag
+- **Dynamic metrics**: Supports any metrics (exact_match, f1, bertscore, custom)
+- **Comparison view**: Side-by-side baseline vs ScaleDown with cost savings
+- **Private or public**: Control visibility via HF permissions
+
+### Architecture
+
+```
+Local Benchmarks ──▶ HF Dataset ──▶ HF Space (Gradio UI)
+    └── huggingface/   └── Private     └── hf_space/
+        uploader.py        Storage          app.py
+```
+
+**Two components:**
+1. **`huggingface/`** - Local upload module (runs on your machine)
+2. **`hf_space/`** - Leaderboard UI (deployed to HuggingFace Space)
+
+### Usage Examples
+
+**Upload during benchmark:**
+```bash
+python run_benchmarks.py --config config/experiments.yaml --upload-hf
+```
+
+**Upload existing results:**
+```bash
+# All results
+python upload_to_hf.py --all
+
+# Specific results
+python upload_to_hf.py --file results/summaries/*hotpotqa*.json
+
+# Dry run
+python upload_to_hf.py --all --dry-run
+```
+
+**Config-driven upload:**
+```yaml
+# config/experiments.yaml
+upload_to_hf: true
+
+experiments:
+  - id: hotpotqa_baseline_openai
+    ...
+```
+---

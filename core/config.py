@@ -73,6 +73,7 @@ class ExperimentConfig:
 class BenchmarkConfig:
     """Root benchmark configuration."""
     experiments: List[ExperimentConfig]
+    upload_to_hf: bool = False  # Whether to upload results to HuggingFace after experiments
     
     def __post_init__(self):
         if not self.experiments:
@@ -119,4 +120,7 @@ def load_config(config_path: Path) -> BenchmarkConfig:
     if "experiments" not in data:
         raise ValueError("'experiments' key is required in config")
     
-    return BenchmarkConfig(experiments=data["experiments"])
+    return BenchmarkConfig(
+        experiments=data["experiments"],
+        upload_to_hf=data.get("upload_to_hf", False)
+    )
