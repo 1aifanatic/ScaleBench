@@ -53,8 +53,8 @@ class TaskConfig:
 class MLflowConfig:
     """MLflow configuration."""
     enabled: bool = False
-    tracking_uri: str = "http://localhost:5000"
-    experiment_name: str = "scaledown-benchmarking"
+    tracking_uri: str = "http://127.0.0.1:5000"
+    experiment_name: str = "ScaleDown"
 
 
 @dataclass
