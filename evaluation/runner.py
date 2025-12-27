@@ -126,53 +126,68 @@ def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
             if example_id in existing_ids:
                 continue
             
-            # Generate response
-            start_time = time.time()
-            
-            # Build generation kwargs from experiment config.model.generation if present
-            generation_kwargs = {}
-            gen_cfg = getattr(config.model, "generation", None) or {}
-            # Map config keys to GenerationInput fields
-            if "temperature" in gen_cfg and gen_cfg["temperature"] is not None:
-                generation_kwargs["temperature"] = gen_cfg["temperature"]
-            if "top_p" in gen_cfg and gen_cfg["top_p"] is not None:
-                generation_kwargs["top_p"] = gen_cfg["top_p"]
-            # Support both `max_tokens` (YAML-friendly) and `max_output_tokens` as synonyms
-            max_tokens_val = gen_cfg.get("max_tokens") if "max_tokens" in gen_cfg else gen_cfg.get("max_output_tokens")
-            if max_tokens_val is not None:
-                generation_kwargs["max_output_tokens"] = max_tokens_val
-
-            # Build input via task (handles prompt ordering and context separation)
-            generation_input = task.build_prompt(example, **generation_kwargs)
-            
-            output = model_client.generate(generation_input)
-            latency_ms = (time.time() - start_time) * 1000
-            
-            # Postprocess prediction
-            prediction = task.postprocess(output.text)
-            
-            # Get gold answers (already list from dataset)
+            # Get gold answers early so we can include them in the trace
             gold_answers = example["answer"]
             
-            # Compute metrics per-example
-            example_metrics = {}
-            for metric_name, metric_fn in metric_fns.items():
-                # Pass predictions and references as lists
-                score_dict = metric_fn(
-                    predictions=[prediction],
-                    references=[gold_answers],
-                    normalize_fn=task.normalize,
-                )
-                # Handle metrics that return multiple scores (e.g., bertscore)
-                if metric_name in score_dict:
-                    # Single score with matching key (e.g., f1 -> {"f1": 0.95})
-                    example_metrics[metric_name] = score_dict[metric_name]
-                else:
-                    # Multiple scores (e.g., bertscore -> {"bertscore_precision": ..., "bertscore_recall": ..., "bertscore_f1": ...})
-                    for score_key, score_value in score_dict.items():
-                        example_metrics[score_key] = score_value
+            # Wrap entire example processing in a span with gold answer
+            with mlflow_utils.start_span(name=f"example_{example_id}", span_type="CHAIN") as example_span:
+                # Set gold/reference answer as span attribute for visibility in traces
+                example_span.set_inputs({
+                    "example_id": example_id,
+                    "gold_answer": gold_answers,  # Reference/expected answer
+                })
+                
+                # Generate response
+                start_time = time.time()
+                
+                # Build generation kwargs from experiment config.model.generation if present
+                generation_kwargs = {}
+                gen_cfg = getattr(config.model, "generation", None) or {}
+                # Map config keys to GenerationInput fields
+                if "temperature" in gen_cfg and gen_cfg["temperature"] is not None:
+                    generation_kwargs["temperature"] = gen_cfg["temperature"]
+                if "top_p" in gen_cfg and gen_cfg["top_p"] is not None:
+                    generation_kwargs["top_p"] = gen_cfg["top_p"]
+                # Support both `max_tokens` (YAML-friendly) and `max_output_tokens` as synonyms
+                max_tokens_val = gen_cfg.get("max_tokens") if "max_tokens" in gen_cfg else gen_cfg.get("max_output_tokens")
+                if max_tokens_val is not None:
+                    generation_kwargs["max_output_tokens"] = max_tokens_val
+
+                # Build input via task (handles prompt ordering and context separation)
+                generation_input = task.build_prompt(example, **generation_kwargs)
+                
+                output = model_client.generate(generation_input)
+                latency_ms = (time.time() - start_time) * 1000
+                
+                # Postprocess prediction
+                prediction = task.postprocess(output.text)
+                
+                # Compute metrics per-example
+                example_metrics = {}
+                for metric_name, metric_fn in metric_fns.items():
+                    # Pass predictions and references as lists
+                    score_dict = metric_fn(
+                        predictions=[prediction],
+                        references=[gold_answers],
+                        normalize_fn=task.normalize,
+                    )
+                    # Handle metrics that return multiple scores (e.g., bertscore)
+                    if metric_name in score_dict:
+                        # Single score with matching key (e.g., f1 -> {"f1": 0.95})
+                        example_metrics[metric_name] = score_dict[metric_name]
+                    else:
+                        # Multiple scores (e.g., bertscore -> {"bertscore_precision": ..., "bertscore_recall": ..., "bertscore_f1": ...})
+                        for score_key, score_value in score_dict.items():
+                            example_metrics[score_key] = score_value
+                
+                # Set span outputs with prediction and metrics
+                example_span.set_outputs({
+                    "prediction": prediction,
+                    "metrics": example_metrics,
+                    "latency_ms": latency_ms,
+                })
             
-            # Collect result
+            # Collect result (outside span, just data collection)
             result = {
                 "id": example_id,
                 "model": config.model.name,

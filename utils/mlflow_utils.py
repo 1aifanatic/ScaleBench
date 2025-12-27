@@ -6,8 +6,10 @@ Key features:
 - Enable auto-tracing for OpenAI and Gemini
 - Global enable/disable flag to gate all MLflow operations
 - Context manager and decorator helpers for tracing
+- Robust retry configuration for trace logging
 """
 import logging
+import os
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -51,11 +53,32 @@ def setup_mlflow(
         return False
     
     try:
+        os.environ.setdefault("MLFLOW_HTTP_REQUEST_MAX_RETRIES", "5")  
+        os.environ.setdefault("MLFLOW_HTTP_REQUEST_TIMEOUT", "120")  
+        os.environ.setdefault("MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR", "2") 
+        os.environ.setdefault("MLFLOW_HTTP_REQUEST_BACKOFF_JITTER", "1.0")  
+        os.environ.setdefault("MLFLOW_ASYNC_TRACE_LOGGING_RETRY_TIMEOUT", "300")  
+        os.environ.setdefault("MLFLOW_ASYNC_TRACE_LOGGING_MAX_WORKERS", "3")  
+        
         import mlflow
         
-        # Set tracking URI and experiment
         mlflow.set_tracking_uri(tracking_uri)
-        mlflow.set_experiment(experiment_name)
+        logger.info(f"MLflow tracking URI set to: {tracking_uri}")
+        
+        # Set experiment (will create if doesn't exist)
+        try:
+            mlflow.set_experiment(experiment_name)
+            logger.info(f"MLflow experiment set to: {experiment_name}")
+        except Exception as e:
+            logger.error(f"Failed to set MLflow experiment '{experiment_name}': {e}")
+            logger.info("Attempting to create experiment explicitly...")
+            try:
+                experiment_id = mlflow.create_experiment(experiment_name)
+                mlflow.set_experiment(experiment_name)
+                logger.info(f"Created MLflow experiment '{experiment_name}' with ID: {experiment_id}")
+            except Exception as create_error:
+                logger.error(f"Failed to create experiment: {create_error}")
+                raise
         
         # For each supported provider, enable auto-tracing. Add this for new providers as needed. 
 
@@ -75,7 +98,7 @@ def setup_mlflow(
         
         _mlflow_enabled = True
         logger.info(
-            f"MLflow initialized: tracking_uri={tracking_uri}, "
+            f"MLflow initialized successfully: tracking_uri={tracking_uri}, "
             f"experiment={experiment_name}"
         )
         return True
@@ -249,6 +272,43 @@ def start_span(name: str, span_type: Optional[str] = None):
     except Exception as e:
         logger.warning(f"Failed to start MLflow span: {e}")
         return _NoOpSpan()
+
+
+def get_current_active_span():
+    """Get the current active MLflow span if one exists.
+    
+    Returns:
+        The current active span, or None if no span is active or MLflow is disabled.
+    """
+    if not _mlflow_enabled:
+        return None
+    
+    try:
+        import mlflow
+        return mlflow.get_current_active_span()
+    except Exception as e:
+        logger.warning(f"Failed to get current MLflow span: {e}")
+        return None
+
+
+def set_span_attribute(key: str, value) -> None:
+    """Set an attribute on the current active span if one exists.
+    
+    This is useful for adding metadata like gold/reference answers to auto-traced spans.
+    
+    Args:
+        key: The attribute key.
+        value: The attribute value.
+    """
+    if not _mlflow_enabled:
+        return
+    
+    try:
+        span = get_current_active_span()
+        if span:
+            span.set_attribute(key, value)
+    except Exception as e:
+        logger.warning(f"Failed to set span attribute: {e}")
 
 
 class _NoOpContextManager:

@@ -295,8 +295,10 @@ Optional MLflow integration provides experiment tracking, tracing, and visibilit
 
 1. **Start MLflow server** (in a separate terminal):
    ```bash
-   mlflow server
+   mlflow server --host 127.0.0.1 --port 5000 --allowed-hosts "*"
    ```
+   
+   **Note**: MLflow 3.5.0+ includes security middleware that validates Host headers. For local development, use `--allowed-hosts "*"` to allow all hosts. For production, specify exact hosts like `--allowed-hosts "mlflow.company.com,localhost"`.
 
 2. **Run benchmarks with MLflow enabled**:
    ```bash
@@ -307,7 +309,7 @@ Optional MLflow integration provides experiment tracking, tracing, and visibilit
    python run_benchmarks.py
    ```
 
-3. **View results** at http://localhost:5000
+3. **View results** at http://127.0.0.1:5000
 
 ### Configuration
 
@@ -315,8 +317,8 @@ Enable via `config/experiments.yaml`:
 ```yaml
 mlflow:
   enabled: true
-  tracking_uri: "http://localhost:5000"
-  experiment_name: "scaledown-benchmarking"
+  tracking_uri: "http://127.0.0.1:5000"
+  experiment_name: "ScaleDown"
 ```
 
 Or via CLI flags:
@@ -354,6 +356,31 @@ Or via CLI flags:
 - **Runs**: Compare experiments side-by-side
 - **Artifacts**: Download raw results directly
 - **Metrics**: Visualize performance across runs
+
+### Troubleshooting MLflow
+
+**403 Error: "API request to endpoint ... failed with error code 403"**
+
+This is caused by MLflow's security middleware (added in v3.5.0+) that validates Host headers to prevent DNS rebinding attacks.
+
+**Solution**: Restart MLflow server with `--allowed-hosts` flag:
+```bash
+# Allow all hosts (local development)
+mlflow server --host 127.0.0.1 --port 5000 --allowed-hosts "*"
+
+# Or be specific
+mlflow server --host 127.0.0.1 --port 5000 --allowed-hosts "localhost,127.0.0.1,localhost:5000,127.0.0.1:5000"
+```
+
+**404 Error: Experiment not found**
+
+Make sure the experiment name in your config matches what you created in MLflow UI, or the code will create it automatically if it doesn't exist.
+
+**Connection Error: Cannot reach MLflow server**
+
+- Verify server is running: Check http://localhost:5000 in browser
+- Check port: Default is 5000, but can be customized with `--port`
+- Check tracking URI: Ensure config matches server address
 
 ## Project Structure
 

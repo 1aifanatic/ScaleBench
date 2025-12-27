@@ -226,9 +226,10 @@ class ScaleDownClient(ModelClient):
         """
         # Start MLflow span for compression (if enabled)
         with mlflow_utils.start_span(name="scaledown_compress", span_type="TOOL") as span:
-            # Set span inputs
+            # Set span inputs with actual context content for observability
             span.set_inputs({
                 "context_length": len(context),
+                "context": context, 
                 "prompt": prompt,
                 "compression_model": self.compression_model_name,
                 "compression_rate": self.compression_rate,
@@ -292,8 +293,9 @@ class ScaleDownClient(ModelClient):
                         }
                     }
                     
-                    # Set span outputs for MLflow
+                    # Set span outputs for MLflow with full compressed content
                     span.set_outputs({
+                        "compressed_context": results["compressed_prompt"], 
                         "compressed_context_length": len(results["compressed_prompt"]),
                         "compression_ratio": results["compression_ratio"],
                         "original_tokens": results["original_prompt_tokens"],
