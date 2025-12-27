@@ -7,8 +7,8 @@ upload_to_hf: true
 # Enable via CLI: --mlflow, disable: --no-mlflow
 mlflow:
   enabled: false  # Set to true to enable MLflow tracking
-  tracking_uri: "http://localhost:5000"
-  experiment_name: "scaledown-benchmarking"
+  tracking_uri: "http://127.0.0.1:5000"
+  experiment_name: "ScaleDown"
 
 experiments:
   # HotpotQA baseline and ScaleDown experiments
