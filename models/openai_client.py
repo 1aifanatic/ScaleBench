@@ -85,6 +85,17 @@ class OpenAIClient(ModelClient):
         if inp.stop is not None:
             params["stop"] = inp.stop
         
+        # Add structured output (JSON schema) if provided
+        if inp.response_schema is not None:
+            params["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": inp.response_schema.get("name", "response"),
+                    "strict": True,
+                    "schema": inp.response_schema.get("schema", inp.response_schema),
+                }
+            }
+        
         # Retry logic with exponential backoff
         last_exception = None
         for attempt in range(self.max_retries):

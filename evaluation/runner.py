@@ -9,6 +9,12 @@ from core.config import ExperimentConfig
 from core.registry import get_model_client, get_dataset, get_task, get_metrics
 from models.base import GenerationInput
 from dataset.longbench import VALID_TASKS as LONGBENCH_TASKS
+from metrics.retrieval import (
+    compute_retrieval_precision,
+    compute_retrieval_recall,
+    compute_retrieval_f1,
+    compute_combined_score,
+)
 import utils.mlflow_utils as mlflow_utils
 
 
@@ -162,23 +168,95 @@ def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
                 # Postprocess prediction
                 prediction = task.postprocess(output.text)
                 
+                # Check if this is a retrieval task (returns dict with answer and passages)
+                is_retrieval_task = config.task.name.lower() == "retrieval_task"
+                
                 # Compute metrics per-example
                 example_metrics = {}
-                for metric_name, metric_fn in metric_fns.items():
-                    # Pass predictions and references as lists
-                    score_dict = metric_fn(
-                        predictions=[prediction],
-                        references=[gold_answers],
-                        normalize_fn=task.normalize,
-                    )
-                    # Handle metrics that return multiple scores (e.g., bertscore)
-                    if metric_name in score_dict:
-                        # Single score with matching key (e.g., f1 -> {"f1": 0.95})
-                        example_metrics[metric_name] = score_dict[metric_name]
+                
+                if is_retrieval_task and isinstance(prediction, dict):
+                    # Handle retrieval task: separate answer and passage evaluation
+                    pred_answer = prediction.get("answer") or ""
+                    pred_passages = prediction.get("passages")
+                    gold_passages = example.get("selected_indices", [])
+                    
+                    # For answer metrics, use both answer and well_formed_answers as references
+                    # Take max score across reference sets
+                    well_formed = example.get("well_formed_answers", [])
+                    reference_sets = [gold_answers]
+                    if well_formed:
+                        reference_sets.append(well_formed)
+                    
+                    # Compute answer metrics (exact_match, f1, bertscore)
+                    answer_metric_names = [m for m in metric_fns.keys() 
+                                          if not m.startswith("retrieval_")]
+                    for metric_name in answer_metric_names:
+                        metric_fn = metric_fns[metric_name]
+                        best_score = {}
+                        for ref_set in reference_sets:
+                            score_dict = metric_fn(
+                                predictions=[pred_answer],
+                                references=[ref_set],
+                                normalize_fn=task.normalize,
+                            )
+                            # Take max for each score key
+                            for key, value in score_dict.items():
+                                if key not in best_score or value > best_score[key]:
+                                    best_score[key] = value
+                        # Store best scores
+                        if metric_name in best_score:
+                            example_metrics[metric_name] = best_score[metric_name]
+                        else:
+                            for key, value in best_score.items():
+                                example_metrics[key] = value
+                    
+                    # Compute retrieval metrics
+                    if pred_passages is not None:
+                        retrieval_scores = {}
+                        retrieval_scores.update(compute_retrieval_precision(
+                            [pred_passages], [gold_passages]
+                        ))
+                        retrieval_scores.update(compute_retrieval_recall(
+                            [pred_passages], [gold_passages]
+                        ))
+                        retrieval_scores.update(compute_retrieval_f1(
+                            [pred_passages], [gold_passages]
+                        ))
+                        example_metrics.update(retrieval_scores)
                     else:
-                        # Multiple scores (e.g., bertscore -> {"bertscore_precision": ..., "bertscore_recall": ..., "bertscore_f1": ...})
-                        for score_key, score_value in score_dict.items():
-                            example_metrics[score_key] = score_value
+                        # No passages predicted
+                        example_metrics["retrieval_precision"] = 0.0
+                        example_metrics["retrieval_recall"] = 0.0
+                        example_metrics["retrieval_f1"] = 0.0
+                    
+                    # Compute combined score
+                    answer_f1 = example_metrics.get("f1", 0.0)
+                    retrieval_f1 = example_metrics.get("retrieval_f1", 0.0)
+                    weights = config.combined_score_weights or {}
+                    combined = compute_combined_score(
+                        answer_f1=answer_f1,
+                        retrieval_f1=retrieval_f1,
+                        answer_weight=weights.get("answer_weight", 0.7),
+                        retrieval_weight=weights.get("retrieval_weight", 0.3),
+                    )
+                    example_metrics.update(combined)
+                else:
+                    # Standard task: compute metrics normally
+                    for metric_name, metric_fn in metric_fns.items():
+                        # Pass predictions and references as lists
+                        score_dict = metric_fn(
+                            predictions=[prediction],
+                            references=[gold_answers],
+                            normalize_fn=task.normalize,
+                        )
+                        # Handle metrics that return multiple scores (e.g., bertscore)
+                        if metric_name in score_dict:
+                            # Single score with matching key (e.g., f1 -> {"f1": 0.95})
+                            example_metrics[metric_name] = score_dict[metric_name]
+                        else:
+                            # Multiple scores (e.g., bertscore -> {"bertscore_precision": ..., "bertscore_recall": ..., "bertscore_f1": ...})
+                            for score_key, score_value in score_dict.items():
+                                example_metrics[score_key] = score_value
                 
                 # Set span outputs with prediction and metrics
                 example_span.set_outputs({
@@ -188,23 +266,47 @@ def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
                 })
             
             # Collect result (outside span, just data collection)
-            result = {
-                "id": example_id,
-                "model": config.model.name,
-                "dataset": config.dataset.name,
-                "task": config.task.name,
-                "mode": config.model.mode,
-                "input_system_prompt": output.input_system_prompt,
-                "input_question": output.input_question,
-                "input_context": output.input_context,
-                "pred": prediction,
-                "gold": gold_answers,
-                "input_tokens": output.input_tokens,
-                "output_tokens": output.output_tokens,
-                "latency_ms": latency_ms,
-                "cost_usd": output.cost_usd,
-                "metrics": example_metrics,
-            }
+            # For retrieval tasks, include additional fields
+            if is_retrieval_task and isinstance(prediction, dict):
+                result = {
+                    "id": example_id,
+                    "model": config.model.name,
+                    "dataset": config.dataset.name,
+                    "task": config.task.name,
+                    "mode": config.model.mode,
+                    "input_system_prompt": output.input_system_prompt,
+                    "input_question": output.input_question,
+                    "input_context": output.input_context,
+                    "pred_answer": prediction.get("answer"),
+                    "pred_passages": prediction.get("passages"),
+                    "pred": prediction,  # Keep full dict for compatibility
+                    "gold": gold_answers,
+                    "gold_well_formed_answers": example.get("well_formed_answers", []),
+                    "gold_passages": example.get("selected_indices", []),
+                    "input_tokens": output.input_tokens,
+                    "output_tokens": output.output_tokens,
+                    "latency_ms": latency_ms,
+                    "cost_usd": output.cost_usd,
+                    "metrics": example_metrics,
+                }
+            else:
+                result = {
+                    "id": example_id,
+                    "model": config.model.name,
+                    "dataset": config.dataset.name,
+                    "task": config.task.name,
+                    "mode": config.model.mode,
+                    "input_system_prompt": output.input_system_prompt,
+                    "input_question": output.input_question,
+                    "input_context": output.input_context,
+                    "pred": prediction,
+                    "gold": gold_answers,
+                    "input_tokens": output.input_tokens,
+                    "output_tokens": output.output_tokens,
+                    "latency_ms": latency_ms,
+                    "cost_usd": output.cost_usd,
+                    "metrics": example_metrics,
+                }
             
             results.append(result)
             

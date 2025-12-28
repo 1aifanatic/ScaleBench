@@ -27,9 +27,28 @@ ETHIC_RAG_PROMPT = """Instructions:
 - Include only the requested items, nothing else
 - Do not add explanations or surrounding text"""
 
+# MS-MARCO specific prompt for structured output (answer + passage retrieval)
+MSMARCO_RAG_PROMPT = """You are a question answering assistant.
+
+Given a question and numbered passages, you must:
+1. Answer the question using ONLY information from the provided passages
+2. List the passage number(s) that contain the answer
+
+IMPORTANT RULES:
+- Use only information from the passages provided
+- Provide a concise, straightforward answer directly addressing the question
+- If multiple passages contain relevant information, list all of them
+- Passage numbers are 0-indexed (first passage is 0)
+- Return your response as valid JSON in this exact format:
+{"answer": "<your concise answer>", "passages": [<passage numbers used>]}
+
+Example response:
+{"answer": "Paris", "passages": [2, 5]}"""
+
 # Mapping of dataset names to prompts
 RAG_PROMPTS = {
     "hotpotqa": HOTPOTQA_RAG_PROMPT,
     "longbench": LONGBENCH_RAG_PROMPT,
     "ethic": ETHIC_RAG_PROMPT,
+    "msmarco": MSMARCO_RAG_PROMPT,
 }

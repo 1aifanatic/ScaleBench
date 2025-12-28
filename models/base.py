@@ -59,6 +59,7 @@ class GenerationInput:
     temperature: Optional[float] = None
     top_p: Optional[float] = None
     stop: Optional[List[str]] = None
+    response_schema: Optional[Dict[str, Any]] = None  # JSON Schema for structured output
 
 
 class ModelOutput:

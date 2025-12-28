@@ -12,10 +12,12 @@ from models.base import ModelClient, PricingInfo, DEFAULT_MODEL_PRICING
 from dataset.hotpotqa import HotpotQADataset
 from dataset.longbench import LongBenchDataset
 from dataset.ethic import ETHICDataset
+from dataset.msmarco import MSMARCODataset
 from dataset.base import Dataset
 
 # Import tasks
 from tasks.rag_task import RAGTask
+from tasks.retrieval_task import RetrievalTask
 from tasks.base import Task
 
 # Import metrics
@@ -26,6 +28,11 @@ from metrics.set_metrics import (
     compute_set_precision,
     compute_set_recall,
     compute_set_f1,
+)
+from metrics.retrieval import (
+    compute_retrieval_precision,
+    compute_retrieval_recall,
+    compute_retrieval_f1,
 )
 
 
@@ -42,10 +49,12 @@ DATASET_REGISTRY: Dict[str, type] = {
     "hotpotqa": HotpotQADataset,
     "longbench": LongBenchDataset,
     "ethic": ETHICDataset,
+    "msmarco": MSMARCODataset,
 }
 
 TASK_REGISTRY: Dict[str, type] = {
     "rag_qa": RAGTask,
+    "retrieval_task": RetrievalTask,
 }
 
 METRIC_REGISTRY: Dict[str, Callable] = {
@@ -56,6 +65,9 @@ METRIC_REGISTRY: Dict[str, Callable] = {
     "set_precision": compute_set_precision,
     "set_recall": compute_set_recall,
     "set_f1": compute_set_f1,
+    "retrieval_precision": compute_retrieval_precision,
+    "retrieval_recall": compute_retrieval_recall,
+    "retrieval_f1": compute_retrieval_f1,
 }
 
 

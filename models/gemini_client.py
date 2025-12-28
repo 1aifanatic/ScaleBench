@@ -107,6 +107,12 @@ class GeminiClient(ModelClient):
                 thinking_budget=self.thinking_budget
             )
         
+        # Add structured output (JSON schema) if provided
+        if inp.response_schema is not None:
+            config_kwargs["response_mime_type"] = "application/json"
+            schema = inp.response_schema.get("schema", inp.response_schema)
+            config_kwargs["response_schema"] = schema
+        
         config = types.GenerateContentConfig(**config_kwargs)
         
         # Retry logic with exponential backoff
