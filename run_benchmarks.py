@@ -106,9 +106,9 @@ def main():
         mlflow_uri = args.mlflow_uri
         if mlflow_uri is None and config.mlflow:
             mlflow_uri = config.mlflow.tracking_uri
-        mlflow_uri = mlflow_uri or "http://localhost:5000"
+        mlflow_uri = mlflow_uri or "http://127.0.0.1:5000"
         
-        experiment_name = "scaledown-benchmarking"
+        experiment_name = "ScaleDown"
         if config.mlflow and config.mlflow.experiment_name:
             experiment_name = config.mlflow.experiment_name
         

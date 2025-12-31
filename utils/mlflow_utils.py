@@ -29,8 +29,8 @@ def is_mlflow_enabled() -> bool:
 
 def setup_mlflow(
     enabled: bool = True,
-    tracking_uri: str = "http://localhost:5000",
-    experiment_name: str = "scaledown-benchmarking",
+    tracking_uri: str = "http://127.0.0.1:5000",
+    experiment_name: str = "ScaleDown",
 ) -> bool:
     """Initialize MLflow if enabled.
     
@@ -53,6 +53,7 @@ def setup_mlflow(
         return False
     
     try:
+        # note: using setdefault for environment variables means these values can be overridden by environment variables set before the script runs
         os.environ.setdefault("MLFLOW_HTTP_REQUEST_MAX_RETRIES", "5")  
         os.environ.setdefault("MLFLOW_HTTP_REQUEST_TIMEOUT", "120")  
         os.environ.setdefault("MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR", "2") 
@@ -253,7 +254,7 @@ def start_span(name: str, span_type: Optional[str] = None):
     
     Args:
         name: Name of the span.
-        span_type: Optional span type (e.g., "CHAIN", "LLM", "TOOL").
+        span_type: Optional span type allowed by MLflow (e.g., "CHAIN", "LLM", "TOOL").
         
     Returns:
         MLflow span context manager or no-op context manager.

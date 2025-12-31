@@ -270,7 +270,6 @@ class ScaleDownClient(ModelClient):
                     # Check if compression was successful
                     if not data.get("successful", False):
                         logger.error(f"ScaleDown API returned unsuccessful response: {data}")
-                        last_exception = RuntimeError(f"Compression failed: {data}")
                         if attempt < self.max_retries - 1:
                             delay = self.retry_delay * (2 ** attempt)
                             logger.warning(f"Retrying in {delay:.1f}s...")
@@ -312,7 +311,6 @@ class ScaleDownClient(ModelClient):
                     return compression_result
                     
                 except requests.exceptions.RequestException as e:
-                    last_exception = e
                     if attempt < self.max_retries - 1:
                         delay = self.retry_delay * (2 ** attempt)
                         logger.warning(
