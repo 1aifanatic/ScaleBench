@@ -80,6 +80,9 @@ def run_experiment(config: ExperimentConfig) -> Dict[str, Any]:
         # Log artifacts
         _log_mlflow_artifacts(result)
         
+        # Flush traces before run ends to ensure all async traces are persisted
+        mlflow_utils.flush_traces(block=True)
+        
         return result
 
 
