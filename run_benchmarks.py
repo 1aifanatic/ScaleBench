@@ -213,6 +213,10 @@ def main():
                 failed_experiments.append((exp.id, str(e)))
                 logger.error(f"Experiment {exp.id} failed: {e}", exc_info=args.verbose)
 
+    # Final flush of any remaining async traces before displaying results
+    if mlflow_enabled:
+        mlflow_utils.flush_traces(block=True)
+
     # Display final summary
     console.print("\n")
     _display_results_summary(results, failed_experiments)

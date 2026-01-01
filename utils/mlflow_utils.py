@@ -156,8 +156,11 @@ def start_run(
     Returns a context manager that can be used with `with` statement.
     If MLflow is disabled, returns a no-op context manager.
     
+    Run names are automatically suffixed with a timestamp to ensure uniqueness
+    and prevent trace collisions when running the same experiment multiple times.
+    
     Args:
-        run_name: Name for the MLflow run.
+        run_name: Base name for the MLflow run (will be suffixed with timestamp).
         tags: Optional dict of tags to set on the run.
         description: Optional description for the run.
         
@@ -169,9 +172,14 @@ def start_run(
     
     try:
         import mlflow
+        from datetime import datetime
+        
+        # Add timestamp suffix to ensure unique run names
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_run_name = f"{run_name}_{timestamp}"
         
         return mlflow.start_run(
-            run_name=run_name,
+            run_name=unique_run_name,
             tags=tags,
             description=description,
         )
@@ -310,6 +318,30 @@ def set_span_attribute(key: str, value) -> None:
             span.set_attribute(key, value)
     except Exception as e:
         logger.warning(f"Failed to set span attribute: {e}")
+
+
+def flush_traces(block: bool = True) -> None:
+    """Flush any pending async trace logs to ensure all traces are persisted.
+    
+    This should be called before ending an MLflow run or exiting the program
+    to ensure all traces are properly logged to the backend.
+    
+    Args:
+        block: If True (default), block until all traces are flushed.
+               If False, initiate flush but return immediately.
+    """
+    if not _mlflow_enabled:
+        return
+    
+    try:
+        import mlflow
+        mlflow.flush_trace_async_logging(block=block)
+        logger.debug("Flushed async trace logging")
+    except AttributeError:
+        # flush_trace_async_logging may not exist in older MLflow versions
+        logger.debug("mlflow.flush_trace_async_logging not available")
+    except Exception as e:
+        logger.warning(f"Failed to flush MLflow traces: {e}")
 
 
 class _NoOpContextManager:

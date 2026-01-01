@@ -16,8 +16,8 @@ class TestMLflowConfig:
         """Test default MLflow config values."""
         config = MLflowConfig()
         assert config.enabled is False
-        assert config.tracking_uri == "http://localhost:5000"
-        assert config.experiment_name == "scaledown-benchmarking"
+        assert config.tracking_uri == "http://127.0.0.1:5000"
+        assert config.experiment_name == "ScaleDown"
 
     def test_custom_values(self):
         """Test MLflow config with custom values."""
@@ -159,6 +159,13 @@ class TestMLflowUtils:
             span.set_inputs({"x": 1})
             span.set_outputs({"y": 2})
             span.set_attribute("key", "value")
+
+    def test_flush_traces_when_disabled(self):
+        """Test that flush_traces is a no-op when MLflow is disabled."""
+        mlflow_utils._mlflow_enabled = False
+        # Should not raise
+        mlflow_utils.flush_traces(block=True)
+        mlflow_utils.flush_traces(block=False)
 
 
 class TestCLIFlagsLogic:
