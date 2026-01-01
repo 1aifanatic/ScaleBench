@@ -2,10 +2,10 @@
 import tempfile
 from pathlib import Path
 
-import pytest
+
 import yaml
 
-from core.config import load_config, MLflowConfig, BenchmarkConfig
+from core.config import load_config, MLflowConfig
 import utils.mlflow_utils as mlflow_utils
 
 
