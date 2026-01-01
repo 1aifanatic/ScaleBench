@@ -1,12 +1,12 @@
 # Benchmark experiments configuration
 # Each experiment specifies model, dataset, task, and optional metrics.
 
-upload_to_hf: false
+upload_to_hf: true
 
 # MLflow configuration (optional)
 # Enable via CLI: --mlflow, disable: --no-mlflow
 mlflow:
-  enabled: true  # Set to true to enable MLflow tracking
+  enabled: false  # Set to true to enable MLflow tracking
   tracking_uri: "http://127.0.0.1:5000"
   experiment_name: "ScaleDown"
 
