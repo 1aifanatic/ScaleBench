@@ -1,5 +1,5 @@
 """Retrieval task for MS-MARCO with structured output (answer + passages)."""
-from typing import Dict, Any, Optional, Union, List
+from typing import Dict, Any, Optional, Union
 from tasks.base import Task
 from prompts.rag_prompts import RAG_PROMPTS, DEFAULT_RAG_PROMPT
 from models.structured_output import MSMARCO_RESPONSE_SCHEMA, parse_msmarco_response

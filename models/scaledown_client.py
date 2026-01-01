@@ -250,7 +250,7 @@ class ScaleDownClient(ModelClient):
             }
             
             # Retry logic
-            last_exception = None
+
             for attempt in range(self.max_retries):
                 try:
                     start_time = time.time()

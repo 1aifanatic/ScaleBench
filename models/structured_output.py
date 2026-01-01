@@ -111,13 +111,21 @@ def parse_msmarco_response(text: str) -> Dict[str, Any]:
 
 
 def _validate_passages(passages: Any) -> Optional[List[int]]:
-    """Validate and convert passages to list of integers."""
+    """Validate and convert passages to list of non-negative integers."""
     if passages is None:
         return None
     if not isinstance(passages, list):
         return None
     try:
-        return [int(p) for p in passages]
+        validated: List[int] = []
+        for p in passages:
+            value = int(p)
+            if value < 0:
+                # Ignore negative indices
+                continue
+            validated.append(value)
+        # Return None if no valid non-negative indices were found
+        return validated or None
     except (ValueError, TypeError):
         return None
 

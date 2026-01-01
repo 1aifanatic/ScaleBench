@@ -105,7 +105,7 @@ def setup_mlflow(
         return True
         
     except ImportError:
-        logger.warning("MLflow not installed. Run: pip install mlflow>=3.0")
+        logger.warning("MLflow not installed. Run: pip install mlflow>=3.8.0")
         _mlflow_enabled = False
         return False
     except Exception as e:
