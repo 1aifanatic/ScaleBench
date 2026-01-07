@@ -7,6 +7,7 @@ context compression layer before generation. Key features:
 - Fallback to uncompressed baseline on errors
 - Captures compression metrics and metadata
 - Configurable compression rate
+- MLflow tracing support for compression spans
 """
 import logging
 import os
@@ -17,6 +18,7 @@ import requests
 
 from models.base import GenerationInput, ModelOutput, ModelClient
 from settings import settings
+import utils.mlflow_utils as mlflow_utils
 
 
 logger = logging.getLogger(__name__)
@@ -222,89 +224,108 @@ class ScaleDownClient(ModelClient):
         Returns:
             Dictionary with compression results, or None if failed
         """
-        payload = {
-            "context": context,
-            "prompt": prompt,
-            "model": self.compression_model_name,
-            "scaledown": {
-                "rate": self.compression_rate
+        # Start MLflow span for compression (if enabled)
+        with mlflow_utils.start_span(name="scaledown_compress", span_type="TOOL") as span:
+            # Set span inputs with actual context content for observability
+            span.set_inputs({
+                "context_length": len(context),
+                "context": context, 
+                "prompt": prompt,
+                "compression_model": self.compression_model_name,
+                "compression_rate": self.compression_rate,
+            })
+            
+            payload = {
+                "context": context,
+                "prompt": prompt,
+                "model": self.compression_model_name,
+                "scaledown": {
+                    "rate": self.compression_rate
+                }
             }
-        }
-        
-        headers = {
-            "x-api-key": self.scaledown_api_key,
-            "Content-Type": "application/json"
-        }
-        
-        # Retry logic
-        last_exception = None
-        for attempt in range(self.max_retries):
-            try:
-                start_time = time.time()
-                
-                response = requests.post(
-                    self.scaledown_api_url,
-                    json=payload,
-                    headers=headers,
-                    timeout=30,
-                )
-                
-                latency_ms = (time.time() - start_time) * 1000
-                
-                response.raise_for_status()
-                data = response.json()
-                
-                # Check if compression was successful
-                if not data.get("successful", False):
-                    logger.error(f"ScaleDown API returned unsuccessful response: {data}")
-                    last_exception = RuntimeError(f"Compression failed: {data}")
+            
+            headers = {
+                "x-api-key": self.scaledown_api_key,
+                "Content-Type": "application/json"
+            }
+            
+            # Retry logic
+            last_exception = None
+            for attempt in range(self.max_retries):
+                try:
+                    start_time = time.time()
+                    
+                    response = requests.post(
+                        self.scaledown_api_url,
+                        json=payload,
+                        headers=headers,
+                        timeout=30,
+                    )
+                    
+                    latency_ms = (time.time() - start_time) * 1000
+                    
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    # Check if compression was successful
+                    if not data.get("successful", False):
+                        logger.error(f"ScaleDown API returned unsuccessful response: {data}")
+                        if attempt < self.max_retries - 1:
+                            delay = self.retry_delay * (2 ** attempt)
+                            logger.warning(f"Retrying in {delay:.1f}s...")
+                            time.sleep(delay)
+                            continue
+                        else:
+                            return None
+                    
+                    # Extract compression results
+                    results = data.get("results", {})
+                    
+                    compression_result = {
+                        "compressed_prompt": results["compressed_prompt"],
+                        "latency_ms": latency_ms,
+                        "metadata": {
+                            "compression_ratio": results["compression_ratio"],
+                            "original_prompt_tokens": results["original_prompt_tokens"],
+                            "compressed_prompt_tokens": results["compressed_prompt_tokens"],
+                            "compression_time_ms": data.get("latency_ms", latency_ms),
+                        }
+                    }
+                    
+                    # Set span outputs for MLflow with full compressed content
+                    span.set_outputs({
+                        "compressed_context": results["compressed_prompt"], 
+                        "compressed_context_length": len(results["compressed_prompt"]),
+                        "compression_ratio": results["compression_ratio"],
+                        "original_tokens": results["original_prompt_tokens"],
+                        "compressed_tokens": results["compressed_prompt_tokens"],
+                        "latency_ms": latency_ms,
+                    })
+                    
+                    logger.info(
+                        f"Compressed context: {results['original_prompt_tokens']} → "
+                        f"{results['compressed_prompt_tokens']} tokens "
+                        f"(ratio: {results['compression_ratio']:.2%}) in {latency_ms:.0f}ms"
+                    )
+                    
+                    return compression_result
+                    
+                except requests.exceptions.RequestException as e:
                     if attempt < self.max_retries - 1:
                         delay = self.retry_delay * (2 ** attempt)
-                        logger.warning(f"Retrying in {delay:.1f}s...")
+                        logger.warning(
+                            f"ScaleDown API error (attempt {attempt + 1}/{self.max_retries}): {e}. "
+                            f"Retrying in {delay:.1f}s..."
+                        )
                         time.sleep(delay)
-                        continue
                     else:
-                        return None
+                        logger.error(f"ScaleDown API error after {self.max_retries} attempts: {e}")
                 
-                # Extract compression results
-                results = data.get("results", {})
-                
-                compression_result = {
-                    "compressed_prompt": results["compressed_prompt"],
-                    "latency_ms": latency_ms,
-                    "metadata": {
-                        "compression_ratio": results["compression_ratio"],
-                        "original_prompt_tokens": results["original_prompt_tokens"],
-                        "compressed_prompt_tokens": results["compressed_prompt_tokens"],
-                        "compression_time_ms": data.get("latency_ms", latency_ms),
-                    }
-                }
-                
-                logger.info(
-                    f"Compressed context: {results['original_prompt_tokens']} → "
-                    f"{results['compressed_prompt_tokens']} tokens "
-                    f"(ratio: {results['compression_ratio']:.2%}) in {latency_ms:.0f}ms"
-                )
-                
-                return compression_result
-                
-            except requests.exceptions.RequestException as e:
-                last_exception = e
-                if attempt < self.max_retries - 1:
-                    delay = self.retry_delay * (2 ** attempt)
-                    logger.warning(
-                        f"ScaleDown API error (attempt {attempt + 1}/{self.max_retries}): {e}. "
-                        f"Retrying in {delay:.1f}s..."
-                    )
-                    time.sleep(delay)
-                else:
-                    logger.error(f"ScaleDown API error after {self.max_retries} attempts: {e}")
+                except (KeyError, ValueError) as e:
+                    logger.error(f"Invalid ScaleDown API response: {e}")
+                    return None
             
-            except (KeyError, ValueError) as e:
-                logger.error(f"Invalid ScaleDown API response: {e}")
-                return None
-        
-        return None
+            return None
     
     def count_tokens(self, text: str) -> int:
         """Count tokens using base client.

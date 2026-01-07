@@ -13,6 +13,7 @@ from core.config import load_config
 from evaluation.runner import run_experiment
 from evaluation.aggregation import aggregate_from_jsonl, save_summary_csv, save_summary_json
 from huggingface.uploader import upload_result
+import utils.mlflow_utils as mlflow_utils
 
 # Configure logging
 logging.basicConfig(
@@ -67,6 +68,22 @@ def main():
         default=None,
         help="HuggingFace token for uploads (optional, falls back to HF_TOKEN env var).",
     )
+    parser.add_argument(
+        "--mlflow",
+        action="store_true",
+        help="Enable MLflow tracing and logging (overrides config file).",
+    )
+    parser.add_argument(
+        "--no-mlflow",
+        action="store_true",
+        help="Disable MLflow tracing (overrides config file).",
+    )
+    parser.add_argument(
+        "--mlflow-uri",
+        type=str,
+        default=None,
+        help="MLflow tracking URI (default: http://localhost:5000).",
+    )
 
     args = parser.parse_args()
 
@@ -82,6 +99,28 @@ def main():
         sys.exit(1)
 
     console.print(f"[green]Loaded {len(config.experiments)} experiment(s)[/green]\n")
+
+    # Initialize MLflow if enabled
+    mlflow_enabled = _should_enable_mlflow(args, config)
+    if mlflow_enabled:
+        mlflow_uri = args.mlflow_uri
+        if mlflow_uri is None and config.mlflow:
+            mlflow_uri = config.mlflow.tracking_uri
+        mlflow_uri = mlflow_uri or "http://127.0.0.1:5000"
+        
+        experiment_name = "ScaleDown"
+        if config.mlflow and config.mlflow.experiment_name:
+            experiment_name = config.mlflow.experiment_name
+        
+        success = mlflow_utils.setup_mlflow(
+            enabled=True,
+            tracking_uri=mlflow_uri,
+            experiment_name=experiment_name,
+        )
+        if success:
+            console.print(f"[green]MLflow enabled: {mlflow_uri}[/green]\n")
+        else:
+            console.print("[yellow]MLflow initialization failed, continuing without MLflow[/yellow]\n")
 
     # Filter experiments if --experiment-id is specified
     experiments_to_run = config.experiments
@@ -174,6 +213,10 @@ def main():
                 failed_experiments.append((exp.id, str(e)))
                 logger.error(f"Experiment {exp.id} failed: {e}", exc_info=args.verbose)
 
+    # Final flush of any remaining async traces before displaying results
+    if mlflow_enabled:
+        mlflow_utils.flush_traces(block=True)
+
     # Display final summary
     console.print("\n")
     _display_results_summary(results, failed_experiments)
@@ -181,6 +224,28 @@ def main():
     # Exit with error if any experiments failed
     if failed_experiments:
         sys.exit(1)
+
+
+def _should_enable_mlflow(args, config) -> bool:
+    """Determine if MLflow should be enabled.
+    
+    Priority:
+    1. CLI --no-mlflow (disable)
+    2. CLI --mlflow (enable)
+    3. Config mlflow.enabled setting
+    4. Default: False
+    """
+    if args.no_mlflow:
+        return False
+    
+    if args.mlflow:
+        return True
+    
+    # Check config setting
+    if config.mlflow and config.mlflow.enabled:
+        return True
+    
+    return False
 
 
 def _should_upload_to_hf(args, config) -> bool:

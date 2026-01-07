@@ -50,6 +50,14 @@ class TaskConfig:
 
 
 @dataclass
+class MLflowConfig:
+    """MLflow configuration."""
+    enabled: bool = False
+    tracking_uri: str = "http://127.0.0.1:5000"
+    experiment_name: str = "ScaleDown"
+
+
+@dataclass
 class ExperimentConfig:
     """Single experiment configuration."""
     id: str
@@ -74,6 +82,7 @@ class BenchmarkConfig:
     """Root benchmark configuration."""
     experiments: List[ExperimentConfig]
     upload_to_hf: bool = False  # Whether to upload results to HuggingFace after experiments
+    mlflow: Optional[MLflowConfig] = None  # MLflow configuration
     
     def __post_init__(self):
         if not self.experiments:
@@ -92,6 +101,10 @@ class BenchmarkConfig:
             else:
                 validated_exps.append(exp)
         self.experiments = validated_exps
+        
+        # Parse mlflow config if present
+        if self.mlflow is not None and isinstance(self.mlflow, dict):
+            self.mlflow = MLflowConfig(**self.mlflow)
 
 
 def load_config(config_path: Path) -> BenchmarkConfig:
@@ -122,5 +135,6 @@ def load_config(config_path: Path) -> BenchmarkConfig:
     
     return BenchmarkConfig(
         experiments=data["experiments"],
-        upload_to_hf=data.get("upload_to_hf", False)
+        upload_to_hf=data.get("upload_to_hf", False),
+        mlflow=data.get("mlflow"),
     )
