@@ -120,3 +120,52 @@ experiments:
       - set_precision
       - set_recall
       - set_f1
+
+  # MS-MARCO v2.1 baseline - passage retrieval + answer QA
+  - id: msmarco_baseline_openai
+    model:
+      name: openai:gpt-4o
+      mode: baseline
+    dataset:
+      name: msmarco
+      split: validation
+      num_examples: 10
+      seed: 42
+    task:
+      name: retrieval_task
+    metrics:
+      - exact_match
+      - f1
+      - bertscore
+      - retrieval_precision
+      - retrieval_recall
+      - retrieval_f1
+    combined_score_weights:
+      answer_weight: 0.7
+      retrieval_weight: 0.3
+
+  # MS-MARCO v2.1 scaledown - passage retrieval + answer QA
+  - id: msmarco_scaledown_openai
+    model:
+      name: openai:gpt-4o
+      mode: scaledown
+      scaledown:
+        rate: auto
+        compression_model: gemini-2.5-flash
+    dataset:
+      name: msmarco
+      split: validation
+      num_examples: 10
+      seed: 42
+    task:
+      name: retrieval_task
+    metrics:
+      - exact_match
+      - f1
+      - bertscore
+      - retrieval_precision
+      - retrieval_recall
+      - retrieval_f1
+    combined_score_weights:
+      answer_weight: 0.7
+      retrieval_weight: 0.3

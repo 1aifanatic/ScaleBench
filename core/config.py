@@ -65,6 +65,7 @@ class ExperimentConfig:
     dataset: DatasetConfig
     task: TaskConfig
     metrics: Optional[List[str]] = None
+    combined_score_weights: Optional[dict] = None  # For retrieval tasks: {"answer_weight": 0.7, "retrieval_weight": 0.3}
     
     def __post_init__(self):
         if not self.id:
@@ -97,6 +98,7 @@ class BenchmarkConfig:
                     dataset=DatasetConfig(**exp.get("dataset", {})),
                     task=TaskConfig(**exp.get("task", {})),
                     metrics=exp.get("metrics"),
+                    combined_score_weights=exp.get("combined_score_weights"),
                 ))
             else:
                 validated_exps.append(exp)
