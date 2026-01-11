@@ -312,12 +312,12 @@ def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
     # Collect per-example results
     results = []
     
-    # Load examples and iterate
-    examples = dataset.load_examples(
+    # Load examples and convert to list (generator can't be iterated multiple times)
+    examples = list(dataset.load_examples(
         split=config.dataset.split,
         limit=config.dataset.num_examples,
         seed=config.dataset.seed,
-    )
+    ))
     
     # Open output file for writing (resume support: skip existing IDs)
     existing_ids = set()
