@@ -58,6 +58,16 @@ class MLflowConfig:
 
 
 @dataclass
+class ParallelConfig:
+    """Parallel processing configuration."""
+    enabled: bool = False
+    max_workers: int = 5
+    retry_attempts: int = 5
+    retry_base_delay: float = 2.0
+    retry_max_delay: float = 60.0
+
+
+@dataclass
 class ExperimentConfig:
     """Single experiment configuration."""
     id: str
@@ -84,6 +94,7 @@ class BenchmarkConfig:
     experiments: List[ExperimentConfig]
     upload_to_hf: bool = False  # Whether to upload results to HuggingFace after experiments
     mlflow: Optional[MLflowConfig] = None  # MLflow configuration
+    parallel: Optional[ParallelConfig] = None  # Parallel processing configuration
     
     def __post_init__(self):
         if not self.experiments:
@@ -107,6 +118,10 @@ class BenchmarkConfig:
         # Parse mlflow config if present
         if self.mlflow is not None and isinstance(self.mlflow, dict):
             self.mlflow = MLflowConfig(**self.mlflow)
+        
+        # Parse parallel config if present
+        if self.parallel is not None and isinstance(self.parallel, dict):
+            self.parallel = ParallelConfig(**self.parallel)
 
 
 def load_config(config_path: Path) -> BenchmarkConfig:
@@ -139,4 +154,5 @@ def load_config(config_path: Path) -> BenchmarkConfig:
         experiments=data["experiments"],
         upload_to_hf=data.get("upload_to_hf", False),
         mlflow=data.get("mlflow"),
+        parallel=data.get("parallel"),
     )
