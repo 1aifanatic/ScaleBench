@@ -8,18 +8,18 @@ upload_to_hf: true
 mlflow:
   enabled: true  # Set to true to enable MLflow tracking
   tracking_uri: "http://127.0.0.1:5000"
-  experiment_name: "ScaleDown"
+  experiment_name: "ScaleDown" # narrativeqa, qasper, multifieldqa_en, 2wikimqa
 
 experiments:
   # LongBench baseline full dataset evaluation
-  - id: longbench_full_baseline_openai
+  - id: longbench_full_narrativeqa_baseline_openai
     model:
       name: openai:gpt-4o
       mode: baseline
     dataset:
       name: longbench
       split: test
-      task: null # all 4 tasks
+      task: narrativeqa
     task:
       name: rag_qa
     metrics:
@@ -27,7 +27,7 @@ experiments:
       - bertscore
 
   # LongBench scaledown full dataset evaluation
-  - id: longbench_full_scaledown_openai
+  - id: longbench_full_narrativeqa_scaledown_openai
     model:
       name: openai:gpt-4o
       mode: scaledown
@@ -37,11 +37,108 @@ experiments:
     dataset:
       name: longbench
       split: test
-      task: null # all 4 tasks
+      task: narrativeqa
     task:
       name: rag_qa
     metrics:
       - f1
       - bertscore
+
+  - id: longbench_full_2wikimqa_baseline_openai
+    model:
+      name: openai:gpt-4o
+      mode: baseline
+    dataset:
+      name: longbench
+      split: test
+      task: 2wikimqa
+    task:
+      name: rag_qa
+    metrics:
+      - f1
+      - bertscore
+
+  # LongBench scaledown full dataset evaluation
+  - id: longbench_full_2wikimqa_scaledown_openai
+    model:
+      name: openai:gpt-4o
+      mode: scaledown
+      scaledown:
+        rate: auto
+        compression_model: gemini-2.5-flash
+    dataset:
+      name: longbench
+      split: test
+      task: 2wikimqa
+    task:
+      name: rag_qa
+    metrics:
+      - f1
+      - bertscore
+
+  - id: longbench_full_qasper_baseline_openai
+    model:
+      name: openai:gpt-4o
+      mode: baseline
+    dataset:
+      name: longbench
+      split: test
+      task: qasper
+    task:
+      name: rag_qa
+    metrics:
+      - f1
+      - bertscore
+
+  # LongBench scaledown full dataset evaluation
+  - id: longbench_full_qasper_scaledown_openai
+    model:
+      name: openai:gpt-4o
+      mode: scaledown
+      scaledown:
+        rate: auto
+        compression_model: gemini-2.5-flash
+    dataset:
+      name: longbench
+      split: test
+      task: qasper
+    task:
+      name: rag_qa
+    metrics:
+      - f1
+      - bertscore
+
+  - id: longbench_full_multifieldqa_en_baseline_openai
+    model:
+      name: openai:gpt-4o
+      mode: baseline
+    dataset:
+      name: longbench
+      split: test
+      task: multifieldqa_en
+    task:
+      name: rag_qa
+    metrics:
+      - f1
+      - bertscore
+
+  # LongBench scaledown full dataset evaluation
+  - id: longbench_full_multifieldqa_en_scaledown_openai
+    model:
+      name: openai:gpt-4o
+      mode: scaledown
+      scaledown:
+        rate: auto
+        compression_model: gemini-2.5-flash
+    dataset:
+      name: longbench
+      split: test
+      task: multifieldqa_en
+    task:
+      name: rag_qa
+    metrics:
+      - f1
+      - bertscore
+    
 
   
