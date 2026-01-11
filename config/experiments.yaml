@@ -1,7 +1,7 @@
 # Benchmark experiments configuration
 # Each experiment specifies model, dataset, task, and optional metrics.
 
-upload_to_hf: true
+upload_to_hf: false
 
 # MLflow configuration (optional)
 # Enable via CLI: --mlflow, disable: --no-mlflow
@@ -9,6 +9,15 @@ mlflow:
   enabled: false  # Set to true to enable MLflow tracking
   tracking_uri: "http://127.0.0.1:5000"
   experiment_name: "ScaleDown"
+
+# Parallel processing configuration (optional)
+# Enables concurrent processing of examples to speed up benchmarking
+parallel:
+  enabled: true  # Set to true to enable parallel processing
+  max_workers: 5  # Maximum concurrent API requests (adjust based on rate limits)
+  retry_attempts: 5  # Number of retry attempts on rate limit errors
+  retry_base_delay: 2.0  # Base delay for exponential backoff (seconds)
+  retry_max_delay: 60.0  # Maximum delay cap (seconds)
 
 experiments:
   # HotpotQA baseline and ScaleDown experiments

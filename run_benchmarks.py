@@ -10,7 +10,7 @@ from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from core.config import load_config
-from evaluation.runner import run_experiment
+from evaluation.runner import run_experiment, set_parallel_config
 from evaluation.aggregation import aggregate_from_jsonl, save_summary_csv, save_summary_json
 from huggingface.uploader import upload_result
 import utils.mlflow_utils as mlflow_utils
@@ -100,6 +100,14 @@ def main():
 
     console.print(f"[green]Loaded {len(config.experiments)} experiment(s)[/green]\n")
 
+    # Set parallel processing config
+    if config.parallel:
+        set_parallel_config(config.parallel)
+        if config.parallel.enabled:
+            console.print(
+                f"[green]Parallel processing enabled: {config.parallel.max_workers} workers[/green]\n"
+            )
+    
     # Initialize MLflow if enabled
     mlflow_enabled = _should_enable_mlflow(args, config)
     if mlflow_enabled:
