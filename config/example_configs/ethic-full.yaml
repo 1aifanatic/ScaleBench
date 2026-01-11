@@ -1,0 +1,127 @@
+# Benchmark experiments configuration
+# Each experiment specifies model, dataset, task, and optional metrics.
+
+upload_to_hf: true
+
+# MLflow configuration (optional)
+# Enable via CLI: --mlflow, disable: --no-mlflow
+mlflow:
+  enabled: true  # Set to true to enable MLflow tracking
+  tracking_uri: "http://127.0.0.1:5000"
+  experiment_name: "ScaleDown"
+
+# Parallel processing configuration (optional)
+# Enables concurrent processing of examples to speed up benchmarking
+parallel:
+  enabled: true  # Set to true to enable parallel processing
+  max_workers: 10  # Maximum concurrent API requests (adjust based on rate limits)
+  retry_attempts: 5  # Number of retry attempts on rate limit errors
+  retry_base_delay: 2.0  # Base delay for exponential backoff (seconds)
+  retry_max_delay: 60.0  # Maximum delay cap (seconds)
+
+experiments:
+
+  # ETHIC Recalling baseline
+  - id: ethic_recalling_full_baseline_openai
+    model:
+      name: openai:gpt-4o
+      mode: baseline
+    dataset:
+      name: ethic:Recalling
+      split: test
+    task:
+      name: rag_qa
+    metrics:
+      - set_exact_match
+      - set_precision
+      - set_recall
+      - set_f1
+
+  # ETHIC Recalling scaledown
+  - id: ethic_recalling_full_scaledown_openai
+    model:
+      name: openai:gpt-4o
+      mode: scaledown
+      scaledown:
+        rate: auto
+        compression_model: gemini-2.5-flash
+    dataset:
+      name: ethic:Recalling
+      split: test
+    task:
+      name: rag_qa
+    metrics:
+      - set_exact_match
+      - set_precision
+      - set_recall
+      - set_f1
+
+  # ETHIC Attributing baseline
+  - id: ethic_attributing_full_baseline_openai
+    model:
+      name: openai:gpt-4o
+      mode: baseline
+    dataset:
+      name: ethic:Attributing
+      split: test
+    task:
+      name: rag_qa
+    metrics:
+      - set_exact_match
+      - set_precision
+      - set_recall
+      - set_f1
+
+  # ETHIC Attributing scaledown
+  - id: ethic_attributing_full_scaledown_openai
+    model:
+      name: openai:gpt-4o
+      mode: scaledown
+      scaledown:
+        rate: auto
+        compression_model: gemini-2.5-flash
+    dataset:
+      name: ethic:Attributing
+      split: test
+    task:
+      name: rag_qa
+    metrics:
+      - set_exact_match
+      - set_precision
+      - set_recall
+      - set_f1
+
+  # ETHIC Organizing baseline
+  - id: ethic_organizing_full_baseline_openai
+    model:
+      name: openai:gpt-4o
+      mode: baseline
+    dataset:
+      name: ethic:Organizing
+      split: test
+    task:
+      name: rag_qa
+    metrics:
+      - set_exact_match
+      - set_precision
+      - set_recall
+      - set_f1
+
+  # ETHIC Organizing scaledown
+  - id: ethic_organizing_full_scaledown_openai
+    model:
+      name: openai:gpt-4o
+      mode: scaledown
+      scaledown:
+        rate: auto
+        compression_model: gemini-2.5-flash
+    dataset:
+      name: ethic:Organizing
+      split: test
+    task:
+      name: rag_qa
+    metrics:
+      - set_exact_match
+      - set_precision
+      - set_recall
+      - set_f1
