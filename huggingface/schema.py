@@ -13,8 +13,10 @@ def extract_experiment_metadata(experiment_id: str) -> Dict[str, str]:
     Experiment IDs follow patterns:
     - Standard: {dataset}_{mode}_{model}_{timestamp}
       Example: hotpotqa_baseline_openai_20251215_130236
-    - LongBench: {dataset}_{task}_{mode}_{model}_{timestamp}
+    - LongBench single-task: {dataset}_{task}_{mode}_{model}_{timestamp}
       Example: longbench_narrativeqa_baseline_openai_20251223_134109
+    - LongBench multi-task: {dataset}_{category}_{mode}_{model}_{timestamp}
+      Example: longbench_full_baseline_openai_20251225_154113
     
     Args:
         experiment_id: Full experiment identifier.
@@ -33,20 +35,53 @@ def extract_experiment_metadata(experiment_id: str) -> Dict[str, str]:
             "timestamp": ""
         }
     
-    # Timestamp is always last 2 parts (YYYYMMDD_HHMMSS)
-    timestamp = f"{parts[-2]}_{parts[-1]}"
     dataset = parts[0]
     
-    # Detect LongBench pattern: longbench_{task}_{mode}_{model}_{timestamp}
-    if dataset == "longbench" and len(parts) >= 6:
-        task = parts[1]
-        mode = parts[2]
-        model_short = "_".join(parts[3:-2])
+    # For LongBench, try to detect if timestamp is present (last part should be 6 digits for HHMMSS)
+    # and second-to-last should be 8 digits (YYYYMMDD)
+    has_valid_timestamp = False
+    if len(parts) >= 2:
+        try:
+            last_part = parts[-1]
+            second_last = parts[-2]
+            # Timestamp format check: YYYYMMDD_HHMMSS
+            if len(last_part) == 6 and len(second_last) == 8 and last_part.isdigit() and second_last.isdigit():
+                has_valid_timestamp = True
+                timestamp = f"{second_last}_{last_part}"
+            else:
+                timestamp = ""
+        except:
+            timestamp = ""
+    else:
+        timestamp = ""
+    
+    # For longbench, detect if it's multi-task (full, all, etc) or single-task
+    if dataset == "longbench" and len(parts) >= 4:
+        # Try to extract mode and model
+        # Pattern: longbench_[category]_mode_model_[timestamp]
+        # mode should be one of: baseline, scaledown
+        
+        if len(parts) == 4:
+            # longbench_mode_model_timestamp - shouldn't happen, but handle it
+            task = ""
+            mode = parts[1]
+            model_short = parts[2]
+        elif parts[1] in ["baseline", "scaledown"]:
+            # Format: longbench_mode_model_timestamp (unusual, no task/category)
+            task = ""
+            mode = parts[1]
+            model_short = "_".join(parts[2:-2]) if len(parts) > 3 else parts[2]
+        else:
+            # Format: longbench_[task/category]_mode_model[_model...]_timestamp
+            # parts[1] is task/category, parts[2] is mode
+            task = parts[1]
+            mode = parts[2]
+            model_short = "_".join(parts[3:-2]) if len(parts) > 4 else parts[3]
     else:
         # Standard pattern: {dataset}_{mode}_{model}_{timestamp}
         task = ""
-        mode = parts[1]
-        model_short = "_".join(parts[2:-2])
+        mode = parts[1] if len(parts) > 1 else "unknown"
+        model_short = "_".join(parts[2:-2]) if len(parts) > 3 else (parts[2] if len(parts) > 2 else "unknown")
     
     return {
         "dataset": dataset,
@@ -75,6 +110,21 @@ def summary_to_leaderboard_row(summary: Dict[str, Any]) -> Dict[str, Any]:
     experiment_id = summary.get("experiment_id", "")
     metadata = extract_experiment_metadata(experiment_id)
     
+    # Extract timestamp from raw_output_files if experiment_id doesn't have it
+    timestamp = metadata.get("timestamp", "")
+    if not timestamp:
+        raw_files = summary.get("raw_output_files", [])
+        if raw_files and isinstance(raw_files, list) and raw_files[0]:
+            # Extract timestamp from first raw file path
+            # Format: results/raw/{experiment_id}_{timestamp}.jsonl
+            first_file = raw_files[0]
+            parts = first_file.split("_")
+            if len(parts) >= 2:
+                # Last two parts should be YYYYMMDD and HHMMSS (or similar)
+                possible_ts = "_".join(parts[-2:]).replace(".jsonl", "")
+                if len(possible_ts.split("_")) == 2:
+                    timestamp = possible_ts
+    
     # Base row with standard fields
     # Prefer fields from summary, fall back to parsed metadata
     row = {
@@ -84,7 +134,7 @@ def summary_to_leaderboard_row(summary: Dict[str, Any]) -> Dict[str, Any]:
         "mode": summary.get("mode", metadata["mode"]),  # Use summary mode first
         "task": summary.get("task", metadata["task"]),  # Use summary task first
         "n_examples": summary.get("n_examples", 0),
-        "timestamp": metadata["timestamp"],
+        "timestamp": timestamp,
     }
     
     # Extract all metric means dynamically
@@ -95,22 +145,37 @@ def summary_to_leaderboard_row(summary: Dict[str, Any]) -> Dict[str, Any]:
             row[f"{metric_name}_mean"] = metric_data.get("mean", 0.0)
             row[f"{metric_name}_std"] = metric_data.get("std", 0.0)
         else:
-            # Direct value (for backwards compatibility)
+            # Direct value 
             row[f"{metric_name}_mean"] = metric_data
     
     # Add latency stats
+    # Try nested format first (single-task), then direct format (multi-task)
     latency_ms = summary.get("latency_ms", {})
-    if isinstance(latency_ms, dict):
+    if isinstance(latency_ms, dict) and latency_ms:
         row["avg_latency_ms"] = latency_ms.get("mean", 0.0)
         row["latency_p50"] = latency_ms.get("p50", 0.0)
         row["latency_p95"] = latency_ms.get("p95", 0.0)
     else:
-        row["avg_latency_ms"] = latency_ms
+        # Direct format (multi-task experiments)
+        row["avg_latency_ms"] = summary.get("avg_latency_ms", 0.0)
+        # For p50/p95, try nested format or use 0
+        if isinstance(latency_ms, dict):
+            row["latency_p50"] = latency_ms.get("p50", 0.0)
+            row["latency_p95"] = latency_ms.get("p95", 0.0)
+        else:
+            row["latency_p50"] = 0.0
+            row["latency_p95"] = 0.0
     
     # Add token stats
+    # Try nested format first (single-task), then direct format (multi-task)
     tokens = summary.get("tokens", {})
-    row["avg_input_tokens"] = tokens.get("avg_input_tokens", 0.0)
-    row["avg_output_tokens"] = tokens.get("avg_output_tokens", 0.0)
+    if isinstance(tokens, dict) and tokens:
+        row["avg_input_tokens"] = tokens.get("avg_input_tokens", 0.0)
+        row["avg_output_tokens"] = tokens.get("avg_output_tokens", 0.0)
+    else:
+        # Direct format (multi-task experiments)
+        row["avg_input_tokens"] = summary.get("avg_input_tokens", 0.0)
+        row["avg_output_tokens"] = summary.get("avg_output_tokens", 0.0)
     
     # Add cost stats
     cost = summary.get("cost", {})

@@ -20,7 +20,7 @@ from src.display.columns import (
 
     get_column_types,
 )
-
+from src.data_loader import get_leaderboard_df, get_comparison_df
 from src.envs import API, RESULTS_DATASET, TOKEN
 
 

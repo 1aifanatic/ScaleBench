@@ -88,18 +88,25 @@ def results_to_dataframe(results: List[Dict[str, Any]]) -> pd.DataFrame:
     
     # Convert timestamp to human-readable format (UTC)
     if "timestamp" in df.columns:
-        parsed_ts = pd.to_datetime(
-            df["timestamp"],
-            format="%Y%m%d_%H%M%S",
-            utc=True,
-            errors="coerce",
-        )
-        # Only overwrite successfully parsed timestamps; keep original values for malformed ones
-        valid_mask = parsed_ts.notna()
-        if not valid_mask.all():
-            num_failed = (~valid_mask).sum()
-            print(f"Warning: failed to parse {num_failed} timestamp value(s); leaving them unchanged.")
-        df.loc[valid_mask, "timestamp"] = parsed_ts[valid_mask].dt.strftime("%Y-%m-%d %H:%M UTC")
+        def safe_parse_timestamp(ts):
+            """Safely parse timestamp, return human-readable or original value."""
+            if not ts or (isinstance(ts, float) and pd.isna(ts)):
+                return ts
+            
+            ts_str = str(ts).strip()
+            if not ts_str or ts_str == "None":
+                return "Unknown"
+            
+            # Try to parse expected format YYYYMMDD_HHMMSS
+            try:
+                parsed = pd.to_datetime(ts_str, format="%Y%m%d_%H%M%S", utc=True)
+                return parsed.strftime("%Y-%m-%d %H:%M UTC")
+            except:
+                # If parsing fails, return original or "Unknown"
+                return ts_str if ts_str else "Unknown"
+        
+        df["timestamp"] = df["timestamp"].apply(safe_parse_timestamp)
+    
     # Round numeric columns
     numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
     df[numeric_cols] = df[numeric_cols].round(4)
