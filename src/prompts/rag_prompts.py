@@ -45,10 +45,19 @@ IMPORTANT RULES:
 Example response:
 {"answer": "Paris", "passages": [2, 5]}"""
 
+# FinanceBench specific prompt for financial document QA
+FINANCEBENCH_RAG_PROMPT = """Instructions:
+- Answer the financial question based only on the provided context
+- Be precise with numbers, units, and currency values
+- If the answer is a number, include the exact value with units
+  (e.g., "$1.2 billion", "15.3%")
+- Do not add explanations or extra information"""
+
 # Mapping of dataset names to prompts
 RAG_PROMPTS = {
     "hotpotqa": HOTPOTQA_RAG_PROMPT,
     "longbench": LONGBENCH_RAG_PROMPT,
     "ethic": ETHIC_RAG_PROMPT,
     "msmarco": MSMARCO_RAG_PROMPT,
+    "financebench": FINANCEBENCH_RAG_PROMPT,
 }

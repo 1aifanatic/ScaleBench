@@ -178,3 +178,37 @@ experiments:
     combined_score_weights:
       answer_weight: 0.7
       retrieval_weight: 0.3
+
+  # FinanceBench experiments (financial document QA with gpt-5.2)
+  - id: financebench_baseline_gpt52
+    model:
+      name: openai:gpt-5.2
+      mode: baseline
+    dataset:
+      name: financebench
+      split: train
+      num_examples: 150
+      seed: 42
+    task:
+      name: rag_qa
+    metrics:
+      - exact_match
+      - f1
+
+  - id: financebench_scaledown_gpt52
+    model:
+      name: openai:gpt-5.2
+      mode: scaledown
+      scaledown:
+        rate: auto
+        compression_model: gemini-2.5-flash
+    dataset:
+      name: financebench
+      split: train
+      num_examples: 150
+      seed: 42
+    task:
+      name: rag_qa
+    metrics:
+      - exact_match
+      - f1

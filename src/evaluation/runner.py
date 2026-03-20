@@ -251,9 +251,7 @@ def _process_single_example(
             "dataset": config.dataset.name,
             "task": config.task.name,
             "mode": config.model.mode,
-            "input_system_prompt": output.input_system_prompt,
-            "input_question": output.input_question,
-            "input_context": output.input_context,
+            "question": example.get("question", ""),
             "pred_answer": prediction.get("answer"),
             "pred_passages": prediction.get("passages"),
             "pred": prediction,
@@ -273,9 +271,7 @@ def _process_single_example(
             "dataset": config.dataset.name,
             "task": config.task.name,
             "mode": config.model.mode,
-            "input_system_prompt": output.input_system_prompt,
-            "input_question": output.input_question,
-            "input_context": output.input_context,
+            "question": example.get("question", ""),
             "pred": prediction,
             "gold": gold_answers,
             "input_tokens": output.input_tokens,
@@ -284,6 +280,8 @@ def _process_single_example(
             "cost_usd": output.cost_usd,
             "metrics": example_metrics,
         }
+        if "context_source" in example:
+            result["context_source"] = example["context_source"]
     
     return result
 
@@ -387,7 +385,8 @@ def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
     # Aggregate results
     aggregated = _aggregate_results(results, config)
     aggregated["raw_output_file"] = str(raw_output_file)
-    
+    aggregated["results"] = results
+
     return aggregated
 
 

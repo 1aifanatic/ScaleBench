@@ -5,7 +5,13 @@ It can be used to update the deployment as well.
 """
 import argparse
 import os
+import sys
 from pathlib import Path
+
+# Ensure src/ is on the path when run directly
+_src = Path(__file__).parent.parent / "src"
+if str(_src) not in sys.path:
+    sys.path.insert(0, str(_src))
 
 from huggingface_hub import HfApi
 from rich.console import Console
@@ -17,7 +23,7 @@ console = Console()
 def deploy_space(
     space_id: str,
     token: str,
-    space_dir: Path = Path("hf_space"),
+    space_dir: Path = Path("src/hf_space"),
     commit_message: str = "Update leaderboard Space",
 ) -> None:
     """Deploy Space to HuggingFace.
@@ -88,8 +94,8 @@ Examples:
     parser.add_argument(
         "--space-dir",
         type=Path,
-        default=Path("hf_space"),
-        help="Local Space directory (default: hf_space/)"
+        default=Path("src/hf_space"),
+        help="Local Space directory (default: src/hf_space/)"
     )
     
     parser.add_argument(
