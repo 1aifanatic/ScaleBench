@@ -5,6 +5,11 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+# Ensure src/ is on the path when run directly
+_src = Path(__file__).parent.parent / "src"
+if str(_src) not in sys.path:
+    sys.path.insert(0, str(_src))
+
 from rich.console import Console
 from rich.table import Table
 

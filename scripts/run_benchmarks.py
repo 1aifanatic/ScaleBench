@@ -5,13 +5,23 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+# Ensure src/ is on the path when run directly
+_src = Path(__file__).parent.parent / "src"
+if str(_src) not in sys.path:
+    sys.path.insert(0, str(_src))
+
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from core.config import load_config
 from evaluation.runner import run_experiment, set_parallel_config
-from evaluation.aggregation import aggregate_from_jsonl, save_summary_csv, save_summary_json
+from evaluation.aggregation import (
+    aggregate_from_jsonl,
+    save_summary_csv,
+    save_summary_json,
+    save_predictions_csv,
+)
 from huggingface.uploader import upload_result
 import utils.mlflow_utils as mlflow_utils
 
@@ -209,9 +219,13 @@ def main():
                     summary_dir = Path("results/summaries")
                     summary_csv_path = summary_dir / f"{exp.id}_{timestamp}_summary.csv"
                     summary_json_path = summary_dir / f"{exp.id}_{timestamp}_summary.json"
+                    predictions_csv_path = summary_dir / f"{exp.id}_{timestamp}_predictions.csv"
                     save_summary_csv(aggregated, summary_csv_path)
                     save_summary_json(aggregated, summary_json_path)
-                    
+                    save_predictions_csv(
+                        result.get("results", []), predictions_csv_path
+                    )
+
                     # Upload to HF if requested
                     if _should_upload_to_hf(args, config):
                         _upload_to_hf(summary_json_path, args.hf_token, exp.id)

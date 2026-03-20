@@ -13,6 +13,7 @@ from dataset.hotpotqa import HotpotQADataset
 from dataset.longbench import LongBenchDataset
 from dataset.ethic import ETHICDataset
 from dataset.msmarco import MSMARCODataset
+from dataset.financebench import FinanceBenchDataset
 from dataset.base import Dataset
 
 # Import tasks
@@ -50,6 +51,7 @@ DATASET_REGISTRY: Dict[str, type] = {
     "longbench": LongBenchDataset,
     "ethic": ETHICDataset,
     "msmarco": MSMARCODataset,
+    "financebench": FinanceBenchDataset,
 }
 
 TASK_REGISTRY: Dict[str, type] = {
