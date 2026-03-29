@@ -58,6 +58,14 @@ class MLflowConfig:
 
 
 @dataclass
+class LangSmithConfig:
+    """LangSmith tracing configuration."""
+    enabled: bool = False
+    project_name: str = "ScaleDown"
+    api_key: Optional[str] = None  # Falls back to LANGSMITH_API_KEY env var
+
+
+@dataclass
 class ParallelConfig:
     """Parallel processing configuration."""
     enabled: bool = False
@@ -76,7 +84,8 @@ class ExperimentConfig:
     task: TaskConfig
     metrics: Optional[List[str]] = None
     combined_score_weights: Optional[dict] = None  # For retrieval tasks: {"answer_weight": 0.7, "retrieval_weight": 0.3}
-    
+    tags: Optional[List[str]] = None  # Optional tags for grouping/filtering experiments
+
     def __post_init__(self):
         if not self.id:
             raise ValueError("experiment.id is required")
@@ -86,6 +95,8 @@ class ExperimentConfig:
             self.dataset = DatasetConfig(**self.dataset) if isinstance(self.dataset, dict) else self.dataset
         if not isinstance(self.task, TaskConfig):
             self.task = TaskConfig(**self.task) if isinstance(self.task, dict) else self.task
+        if self.tags is None:
+            self.tags = []
 
 
 @dataclass
@@ -94,6 +105,7 @@ class BenchmarkConfig:
     experiments: List[ExperimentConfig]
     upload_to_hf: bool = False  # Whether to upload results to HuggingFace after experiments
     mlflow: Optional[MLflowConfig] = None  # MLflow configuration
+    langsmith: Optional[LangSmithConfig] = None  # LangSmith tracing configuration
     parallel: Optional[ParallelConfig] = None  # Parallel processing configuration
     
     def __post_init__(self):
@@ -110,6 +122,7 @@ class BenchmarkConfig:
                     task=TaskConfig(**exp.get("task", {})),
                     metrics=exp.get("metrics"),
                     combined_score_weights=exp.get("combined_score_weights"),
+                    tags=exp.get("tags"),
                 ))
             else:
                 validated_exps.append(exp)
@@ -118,7 +131,11 @@ class BenchmarkConfig:
         # Parse mlflow config if present
         if self.mlflow is not None and isinstance(self.mlflow, dict):
             self.mlflow = MLflowConfig(**self.mlflow)
-        
+
+        # Parse langsmith config if present
+        if self.langsmith is not None and isinstance(self.langsmith, dict):
+            self.langsmith = LangSmithConfig(**self.langsmith)
+
         # Parse parallel config if present
         if self.parallel is not None and isinstance(self.parallel, dict):
             self.parallel = ParallelConfig(**self.parallel)
@@ -154,5 +171,6 @@ def load_config(config_path: Path) -> BenchmarkConfig:
         experiments=data["experiments"],
         upload_to_hf=data.get("upload_to_hf", False),
         mlflow=data.get("mlflow"),
+        langsmith=data.get("langsmith"),
         parallel=data.get("parallel"),
     )

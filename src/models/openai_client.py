@@ -79,7 +79,11 @@ class OpenAIClient(ModelClient):
         if inp.temperature is not None:
             params["temperature"] = inp.temperature
         if inp.max_output_tokens is not None:
-            params["max_tokens"] = inp.max_output_tokens
+            # gpt-5.x models use max_completion_tokens instead of max_tokens
+            if self.model_name.startswith("gpt-5"):
+                params["max_completion_tokens"] = inp.max_output_tokens
+            else:
+                params["max_tokens"] = inp.max_output_tokens
         if inp.top_p is not None:
             params["top_p"] = inp.top_p
         if inp.stop is not None:

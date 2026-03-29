@@ -53,6 +53,9 @@ FINANCEBENCH_RAG_PROMPT = """Instructions:
   (e.g., "$1.2 billion", "15.3%")
 - Do not add explanations or extra information"""
 
+# QMSum specific prompt for query-based meeting summarization
+QMSUM_RAG_PROMPT = """You are a meeting summarization assistant. Given a meeting transcript and a query, write a concise abstractive summary (2-5 sentences) that directly answers the query. Use only information from the transcript. Do not copy verbatim — paraphrase and synthesize. No headers or bullets."""
+
 # Mapping of dataset names to prompts
 RAG_PROMPTS = {
     "hotpotqa": HOTPOTQA_RAG_PROMPT,
@@ -60,4 +63,5 @@ RAG_PROMPTS = {
     "ethic": ETHIC_RAG_PROMPT,
     "msmarco": MSMARCO_RAG_PROMPT,
     "financebench": FINANCEBENCH_RAG_PROMPT,
+    "qmsum": QMSUM_RAG_PROMPT,
 }

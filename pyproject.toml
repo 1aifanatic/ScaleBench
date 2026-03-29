@@ -1,7 +1,7 @@
 [project]
-name = "scaledown-benchmarking"
+name = "scalebench"
 version = "0.1.0"
-description = "Benchmarking framework for ScaleDown context compression"
+description = "Open-source benchmarking framework for evaluating context compression on LLM workloads"
 readme = "README.md"
 requires-python = ">=3.12"
 
@@ -12,12 +12,16 @@ dependencies = [
     "pytest==9.0.2",
     "pytest-cov==7.0.0",
     "openai==2.9.0",
+    "langsmith>=0.1.147",
     "google-genai==1.54.0",
     "tiktoken==0.12.0",
     "wikipedia==1.4.0",
     "datasets>=4.6.1",
     "evaluate>=0.4.6",
     "pymupdf>=1.24.0",
+    "rouge-score>=0.1.2",
+    "nltk>=3.9.3",
+    "absl-py>=2.4.0",
 ]
 
 [build-system]

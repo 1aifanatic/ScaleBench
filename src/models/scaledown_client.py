@@ -63,7 +63,7 @@ class ScaleDownClient(ModelClient):
     
     Environment Variables:
         SCALEDOWN_API_KEY: Required API key for ScaleDown
-        SCALEDOWN_API_URL: ScaleDown API endpoint (default: https://api.scaledown.xyz/compress/raw)
+        SCALEDOWN_API_URL: Required ScaleDown API endpoint URL
     """
     
     def __init__(
@@ -121,9 +121,14 @@ class ScaleDownClient(ModelClient):
         # Get API key and URL from settings or environment
         self.scaledown_api_key = api_key or os.getenv("SCALEDOWN_API_KEY") or settings.SCALEDOWN_API_KEY
         self.scaledown_api_url = os.getenv("SCALEDOWN_API_URL") or settings.SCALEDOWN_API_URL
-        
+
         if not self.scaledown_api_key:
             raise ValueError("SCALEDOWN_API_KEY environment variable not set")
+        if not self.scaledown_api_url:
+            raise ValueError(
+                "SCALEDOWN_API_URL environment variable not set. "
+                "Set it to your ScaleDown compression endpoint URL."
+            )
         
         logger.info(
             f"Initialized ScaleDownClient: compression_model={self.compression_model_name}, "

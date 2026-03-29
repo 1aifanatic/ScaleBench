@@ -17,6 +17,7 @@ from metrics.retrieval import (
     compute_combined_score,
 )
 import utils.mlflow_utils as mlflow_utils
+import utils.langsmith_utils as langsmith_utils
 
 # Module-level parallel config (set by run_benchmarks.py)
 _parallel_config: Optional[ParallelConfig] = None
@@ -71,32 +72,39 @@ def run_experiment(config: ExperimentConfig) -> Dict[str, Any]:
             "task": config.task.name,
             "metrics": ",".join(config.metrics) if config.metrics else "",
         }
-        
+
         # Add dataset task if LongBench
         if config.dataset.task:
             params["dataset_task"] = config.dataset.task
-        
+
         # Add ScaleDown params if applicable
         if config.model.mode == "scaledown" and config.model.scaledown:
             params["compression_rate"] = str(config.model.scaledown.get("rate", "auto"))
             params["compression_model"] = config.model.scaledown.get("compression_model", "gemini-2.5-flash")
-        
+
         mlflow_utils.log_params(params)
-        
-        if is_longbench_multi:
-            result = _run_multi_task_experiment(config)
-        else:
-            result = _run_single_task_experiment(config)
-        
+
+        # Open a parallel LangSmith run at experiment scope
+        with langsmith_utils.start_run(run_name=config.id, tags=tags) as ls_run:
+            ls_run.log_params(params)
+
+            if is_longbench_multi:
+                result = _run_multi_task_experiment(config, ls_run=ls_run)
+            else:
+                result = _run_single_task_experiment(config, ls_run=ls_run)
+
+            _log_langsmith_summary(result, ls_run)
+
         # Log aggregated metrics to MLflow
         _log_mlflow_metrics(result, config)
-        
+
         # Log artifacts
         _log_mlflow_artifacts(result)
-        
+
         # Flush traces before run ends to ensure all async traces are persisted
         mlflow_utils.flush_traces(block=True)
-        
+        langsmith_utils.flush_traces()
+
         return result
 
 
@@ -106,6 +114,7 @@ def _process_single_example(
     model_client,
     task,
     metric_fns: Dict[str, Any],
+    ls_parent_run_tree=None,
 ) -> Dict[str, Any]:
     """Process a single example: generate, postprocess, compute metrics.
     
@@ -131,112 +140,166 @@ def _process_single_example(
             "example_id": example_id,
             "gold_answer": gold_answers,
         })
-        
-        # Generate response
-        start_time = time.time()
-        
-        # Build generation kwargs from experiment config.model.generation if present
-        generation_kwargs = {}
-        gen_cfg = getattr(config.model, "generation", None) or {}
-        if "temperature" in gen_cfg and gen_cfg["temperature"] is not None:
-            generation_kwargs["temperature"] = gen_cfg["temperature"]
-        if "top_p" in gen_cfg and gen_cfg["top_p"] is not None:
-            generation_kwargs["top_p"] = gen_cfg["top_p"]
-        max_tokens_val = gen_cfg.get("max_tokens") if "max_tokens" in gen_cfg else gen_cfg.get("max_output_tokens")
-        if max_tokens_val is not None:
-            generation_kwargs["max_output_tokens"] = max_tokens_val
-        
-        # Build input via task
-        generation_input = task.build_prompt(example, **generation_kwargs)
-        
-        output = model_client.generate(generation_input)
-        latency_ms = (time.time() - start_time) * 1000
-        
-        # Postprocess prediction
-        prediction = task.postprocess(output.text)
-        
-        # Check if this is a retrieval task
-        is_retrieval_task = config.task.name.lower() == "retrieval_task"
-        
-        # Compute metrics per-example
-        example_metrics = {}
-        
-        if is_retrieval_task and isinstance(prediction, dict):
-            # Handle retrieval task
-            pred_answer = prediction.get("answer") or ""
-            pred_passages = prediction.get("passages")
-            gold_passages = example.get("selected_indices", [])
-            
-            well_formed = example.get("well_formed_answers", [])
-            reference_sets = [gold_answers]
-            if well_formed:
-                reference_sets.append(well_formed)
-            
-            # Compute answer metrics
-            answer_metric_names = [m for m in metric_fns.keys() 
-                                  if not m.startswith("retrieval_")]
-            for metric_name in answer_metric_names:
-                metric_fn = metric_fns[metric_name]
-                best_score = {}
-                for ref_set in reference_sets:
+
+        # Open a LangSmith child run for this example
+        ls_child = langsmith_utils.start_child_run(
+            ls_parent_run_tree, name=f"example_{example_id}"
+        )
+        with ls_child:
+            # Generate response
+            start_time = time.time()
+
+            # Build generation kwargs from experiment config.model.generation if present
+            generation_kwargs = {}
+            gen_cfg = getattr(config.model, "generation", None) or {}
+            if "temperature" in gen_cfg and gen_cfg["temperature"] is not None:
+                generation_kwargs["temperature"] = gen_cfg["temperature"]
+            if "top_p" in gen_cfg and gen_cfg["top_p"] is not None:
+                generation_kwargs["top_p"] = gen_cfg["top_p"]
+            max_tokens_val = (
+                gen_cfg.get("max_tokens")
+                if "max_tokens" in gen_cfg
+                else gen_cfg.get("max_output_tokens")
+            )
+            if max_tokens_val is not None:
+                generation_kwargs["max_output_tokens"] = max_tokens_val
+
+            # Build input via task
+            generation_input = task.build_prompt(
+                example,
+                model_mode=config.model.mode,
+                **generation_kwargs,
+            )
+
+            ls_child.set_inputs({
+                "system_prompt": generation_input.system_prompt or "",
+                "context": generation_input.context or "",
+                "user_prompt": generation_input.user_prompt or "",
+            })
+
+            output = model_client.generate(generation_input)
+            latency_ms = (time.time() - start_time) * 1000
+
+            # Log the raw LLM call to LangSmith
+            langsmith_utils.log_llm_call(
+                ls_child.child_run, generation_input, output, config.model.name
+            )
+
+            # Postprocess prediction
+            prediction = task.postprocess(output.text)
+
+            # Check if this is a retrieval task
+            is_retrieval_task = config.task.name.lower() == "retrieval_task"
+
+            # Compute metrics per-example
+            example_metrics = {}
+
+            if is_retrieval_task and isinstance(prediction, dict):
+                # Handle retrieval task
+                pred_answer = prediction.get("answer") or ""
+                pred_passages = prediction.get("passages")
+                gold_passages = example.get("selected_indices", [])
+
+                well_formed = example.get("well_formed_answers", [])
+                reference_sets = [gold_answers]
+                if well_formed:
+                    reference_sets.append(well_formed)
+
+                # Compute answer metrics
+                answer_metric_names = [m for m in metric_fns.keys()
+                                       if not m.startswith("retrieval_")]
+                for metric_name in answer_metric_names:
+                    metric_fn = metric_fns[metric_name]
+                    best_score = {}
+                    for ref_set in reference_sets:
+                        score_dict = metric_fn(
+                            predictions=[pred_answer],
+                            references=[ref_set],
+                            normalize_fn=task.normalize,
+                        )
+                        for key, value in score_dict.items():
+                            if key not in best_score or value > best_score[key]:
+                                best_score[key] = value
+                    if metric_name in best_score:
+                        example_metrics[metric_name] = best_score[metric_name]
+                    else:
+                        for key, value in best_score.items():
+                            example_metrics[key] = value
+
+                # Compute retrieval metrics
+                if pred_passages is not None:
+                    retrieval_scores = {}
+                    retrieval_scores.update(compute_retrieval_precision(
+                        [pred_passages], [gold_passages]
+                    ))
+                    retrieval_scores.update(compute_retrieval_recall(
+                        [pred_passages], [gold_passages]
+                    ))
+                    retrieval_scores.update(compute_retrieval_f1(
+                        [pred_passages], [gold_passages]
+                    ))
+                    example_metrics.update(retrieval_scores)
+                else:
+                    example_metrics["retrieval_precision"] = 0.0
+                    example_metrics["retrieval_recall"] = 0.0
+                    example_metrics["retrieval_f1"] = 0.0
+
+                # Compute combined score
+                answer_f1 = example_metrics.get("f1", 0.0)
+                retrieval_f1 = example_metrics.get("retrieval_f1", 0.0)
+                weights = config.combined_score_weights or {}
+                combined = compute_combined_score(
+                    answer_f1=answer_f1,
+                    retrieval_f1=retrieval_f1,
+                    answer_weight=weights.get("answer_weight", 0.7),
+                    retrieval_weight=weights.get("retrieval_weight", 0.3),
+                )
+                example_metrics.update(combined)
+            else:
+                # Standard task
+                for metric_name, metric_fn in metric_fns.items():
                     score_dict = metric_fn(
-                        predictions=[pred_answer],
-                        references=[ref_set],
+                        predictions=[prediction],
+                        references=[gold_answers],
                         normalize_fn=task.normalize,
                     )
-                    for key, value in score_dict.items():
-                        if key not in best_score or value > best_score[key]:
-                            best_score[key] = value
-                if metric_name in best_score:
-                    example_metrics[metric_name] = best_score[metric_name]
-                else:
-                    for key, value in best_score.items():
-                        example_metrics[key] = value
-            
-            # Compute retrieval metrics
-            if pred_passages is not None:
-                retrieval_scores = {}
-                retrieval_scores.update(compute_retrieval_precision(
-                    [pred_passages], [gold_passages]
-                ))
-                retrieval_scores.update(compute_retrieval_recall(
-                    [pred_passages], [gold_passages]
-                ))
-                retrieval_scores.update(compute_retrieval_f1(
-                    [pred_passages], [gold_passages]
-                ))
-                example_metrics.update(retrieval_scores)
-            else:
-                example_metrics["retrieval_precision"] = 0.0
-                example_metrics["retrieval_recall"] = 0.0
-                example_metrics["retrieval_f1"] = 0.0
-            
-            # Compute combined score
-            answer_f1 = example_metrics.get("f1", 0.0)
-            retrieval_f1 = example_metrics.get("retrieval_f1", 0.0)
-            weights = config.combined_score_weights or {}
-            combined = compute_combined_score(
-                answer_f1=answer_f1,
-                retrieval_f1=retrieval_f1,
-                answer_weight=weights.get("answer_weight", 0.7),
-                retrieval_weight=weights.get("retrieval_weight", 0.3),
+                    if metric_name in score_dict:
+                        example_metrics[metric_name] = score_dict[metric_name]
+                    else:
+                        for score_key, score_value in score_dict.items():
+                            example_metrics[score_key] = score_value
+
+            # Log outputs, metadata, and metric scores to LangSmith
+            throughput = (
+                output.output_tokens / (output.latency_ms / 1000.0)
+                if output.latency_ms and output.latency_ms > 0
+                else 0.0
             )
-            example_metrics.update(combined)
-        else:
-            # Standard task
-            for metric_name, metric_fn in metric_fns.items():
-                score_dict = metric_fn(
-                    predictions=[prediction],
-                    references=[gold_answers],
-                    normalize_fn=task.normalize,
-                )
-                if metric_name in score_dict:
-                    example_metrics[metric_name] = score_dict[metric_name]
-                else:
-                    for score_key, score_value in score_dict.items():
-                        example_metrics[score_key] = score_value
-        
-        # Set span outputs
+            ls_child.set_outputs({
+                "prediction": str(prediction),
+                "gold": str(gold_answers),
+                "latency_ms": round(latency_ms, 2),
+                "throughput_tokens_per_sec": round(throughput, 2),
+                **{k: round(v, 4) if isinstance(v, float) else v
+                   for k, v in example_metrics.items()},
+            })
+            ls_child.set_metadata({
+                "input_tokens": output.input_tokens,
+                "output_tokens": output.output_tokens,
+                "latency_ms": output.latency_ms,
+                "throughput_tokens_per_sec": round(throughput, 2),
+                "cost_usd": output.cost_usd,
+                "model": config.model.name,
+                "mode": config.model.mode,
+            })
+            if ls_child.child_run is not None:
+                for metric_name, score in example_metrics.items():
+                    if isinstance(score, (int, float)):
+                        langsmith_utils.log_feedback(
+                            ls_child.child_run.id, metric_name, float(score)
+                        )
+
+        # Set MLflow span outputs
         example_span.set_outputs({
             "prediction": prediction,
             "metrics": example_metrics,
@@ -286,7 +349,7 @@ def _process_single_example(
     return result
 
 
-def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
+def _run_single_task_experiment(config: ExperimentConfig, ls_run=None) -> Dict[str, Any]:
     """Run a single-task experiment.
     
     Args:
@@ -336,6 +399,8 @@ def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
         logger.info(f"Using parallel processing with {_parallel_config.max_workers} workers")
         
         # Create process function with closure over config and components
+        ls_parent_run_tree = ls_run.run_tree if ls_run else None
+
         def process_example(example):
             return _process_single_example(
                 example=example,
@@ -343,6 +408,7 @@ def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
                 model_client=model_client,
                 task=task,
                 metric_fns=metric_fns,
+                ls_parent_run_tree=ls_parent_run_tree,
             )
         
         # Process examples in parallel
@@ -374,6 +440,7 @@ def _run_single_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
                     model_client=model_client,
                     task=task,
                     metric_fns=metric_fns,
+                    ls_parent_run_tree=ls_run.run_tree if ls_run else None,
                 )
                 
                 results.append(result)
@@ -424,7 +491,7 @@ def _aggregate_results(results: List[Dict[str, Any]], config: ExperimentConfig) 
             metric_sums[metric_name] = metric_sums.get(metric_name, 0.0) + score
     
     metric_means = {name: total / n for name, total in metric_sums.items()}
-    
+
     # Aggregate latency and tokens
     total_latency = sum(r["latency_ms"] for r in results)
     total_input_tokens = sum(r["input_tokens"] for r in results)
@@ -476,7 +543,7 @@ def _get_compression_ratio(config: ExperimentConfig) -> Optional[str]:
     return "N/A"
 
 
-def _run_multi_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
+def _run_multi_task_experiment(config: ExperimentConfig, ls_run=None) -> Dict[str, Any]:
     """Run multi-task LongBench experiment (all 4 QA tasks).
     
     Args:
@@ -500,7 +567,7 @@ def _run_multi_task_experiment(config: ExperimentConfig) -> Dict[str, Any]:
         )
         
         # Run single-task experiment
-        task_result = _run_single_task_experiment(task_config)
+        task_result = _run_single_task_experiment(task_config, ls_run=ls_run)
         
         # Store per-task results
         per_task_results[task_name] = task_result
@@ -625,3 +692,42 @@ def _log_mlflow_artifacts(result: Dict[str, Any]) -> None:
     if "raw_output_files" in result:
         for file_path in result["raw_output_files"]:
             mlflow_utils.log_artifact(file_path)
+
+
+def _log_langsmith_summary(result: Dict[str, Any], ls_run) -> None:
+    """Update LangSmith experiment-level run metadata with aggregate summary.
+
+    Args:
+        result: Aggregated results dictionary.
+        ls_run: _LangSmithRun context manager instance (may be a no-op).
+    """
+    if not langsmith_utils.is_langsmith_enabled():
+        return
+    if ls_run is None or ls_run.run_tree is None:
+        return
+
+    outputs: Dict[str, Any] = {}
+    for metric_name, value in result.get("metrics", {}).items():
+        outputs[f"avg_{metric_name}"] = round(
+            value.get("mean", 0.0) if isinstance(value, dict) else value, 4
+        )
+    outputs["avg_latency_ms"] = round(result.get("avg_latency_ms", 0.0), 2)
+    if result.get("total_cost_usd") is not None:
+        outputs["total_cost_usd"] = round(result["total_cost_usd"], 6)
+    if result.get("avg_cost_usd") is not None:
+        outputs["avg_cost_usd"] = round(result["avg_cost_usd"], 6)
+    outputs["n_examples"] = result.get("n_examples", 0)
+
+    n = result.get("n_examples", 0)
+    avg_input = result.get("avg_input_tokens", 0.0)
+    avg_output = result.get("avg_output_tokens", 0.0)
+    total_input = round(avg_input * n)
+    total_output = round(avg_output * n)
+    outputs["total_input_tokens"] = total_input
+    outputs["total_output_tokens"] = total_output
+    outputs["total_tokens"] = total_input + total_output
+    avg_latency_s = result.get("avg_latency_ms", 0.0) / 1000.0
+    if avg_latency_s > 0:
+        outputs["avg_throughput_tokens_per_sec"] = round(avg_output / avg_latency_s, 2)
+
+    ls_run.set_outputs(outputs)

@@ -1,21 +1,40 @@
-# ScaleDown Benchmarking Framework
+[![PyPI version](https://badge.fury.io/py/scalebench.svg)](https://pypi.org/project/scalebench/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Clean, modular, reproducible benchmarking framework to evaluate ScaleDown's context compression layer on downstream LLM workloads.
+# ScaleBench
+
+Open-source benchmarking framework for evaluating **context compression** on LLM workloads. Measure accuracy, latency, and cost when using ScaleDown compression versus baseline LLMs across a variety of QA, retrieval, and summarization tasks.
 
 ## Overview
 
-This framework evaluates **accuracy**, **latency**, and **cost** when using ScaleDown compression vs. baseline LLMs on QA tasks with long contexts. Currently supports:
+ScaleBench runs structured experiments comparing a **baseline** (full context sent directly to the LLM) against a **ScaleDown** mode (context compressed before being sent), reporting:
 
-- **Datasets**: HotpotQA (multi-hop QA), LongBench (long-context QA with 4 tasks), ETHIC (long-document list extraction)
-- **Models**: OpenAI, Gemini
-- **Metrics**: Exact Match, Token-level F1, BERTScore, Set Precision/Recall/F1 (for list outputs)
-- **Tasks**: RAG-style QA with context compression
+- **Accuracy** — Exact Match, Token F1, BERTScore, ROUGE, Set metrics, Retrieval metrics
+- **Latency** — End-to-end latency per example, compression overhead
+- **Cost** — Token usage and USD cost per example and in aggregate
+
+**Supported datasets:**
+| Dataset | Task type |
+|---|---|
+| HotpotQA | Multi-hop QA |
+| LongBench (4 tasks) | Long-context QA |
+| ETHIC | Long-document list extraction |
+| MS-MARCO v2.1 | Passage retrieval + QA |
+| FinanceBench | Financial document QA |
+| QMSum | Query-based meeting summarization |
+
+**Supported models:** OpenAI (gpt-4o, gpt-4.1, gpt-5 variants), Gemini (2.5-flash, 2.5-pro, 2.0-flash), Claude, ScaleDown compression + summarization endpoints
+
+**Supported metrics:** `exact_match`, `f1`, `bertscore`, `rouge1`, `rouge2`, `rougeL`, `set_exact_match`, `set_precision`, `set_recall`, `set_f1`, `retrieval_precision`, `retrieval_recall`, `retrieval_f1`
+
+---
 
 ## Setup
 
 ### 1. Install dependencies
 
-Using uv:
+Using uv (recommended):
 ```bash
 uv venv
 source .venv/bin/activate
@@ -31,43 +50,93 @@ pip install -r requirements.txt
 
 ### 2. Configure API keys
 
-Create a `.env` file:
+Copy `.env.example` to `.env` and fill in your values:
 ```bash
+cp .env.example .env
+```
+
+Required keys depend on which experiments you run:
+```bash
+# Baseline experiments
 OPENAI_API_KEY=your_openai_key
 GEMINI_API_KEY=your_gemini_key
+
+# ScaleDown compression mode
 SCALEDOWN_API_KEY=your_scaledown_key
+
+# ScaleDown summarization mode
+SCALEDOWN_SUMMARIZE_URL=https://your-endpoint/summarization/abstractive
+
+# Optional: LangSmith tracing
+LANGSMITH_API_KEY=your_langsmith_key
 ```
+
+---
 
 ## Running Experiments
 
-### Quick test (5-10 examples)
-```bash
-# Run single experiment
-python3 run_benchmarks.py --experiment-id hotpotqa_baseline_openai
+All commands use `uv run` to ensure the correct environment is used:
 
-# Dry-run to validate config
-python3 run_benchmarks.py --dry-run
+### Quick start
+```bash
+# Dry-run to validate config without executing
+uv run python scripts/run_benchmarks.py --dry-run
+
+# Run a single experiment by ID
+uv run python scripts/run_benchmarks.py --experiment-id hotpotqa_baseline_openai
+
+# Run all experiments with a tag
+uv run python scripts/run_benchmarks.py --tag qmsum
 ```
 
 ### Full benchmark suite
 ```bash
-# Run all experiments in config
-python3 run_benchmarks.py
+# Run all experiments in config (serial)
+uv run python scripts/run_benchmarks.py
 
 # Run with verbose logging
-python3 run_benchmarks.py --verbose
+uv run python scripts/run_benchmarks.py --verbose
 ```
 
-### Experiment Configuration
+### Parallel execution
+```bash
+# Run multiple experiments concurrently (one thread per experiment)
+uv run python scripts/run_benchmarks.py --parallel-experiments
 
-Edit `config/experiments.yaml` to customize:
-- **num_examples**: Number of samples per experiment (default: 10)
-- **model**: Change model name or compression rate
-- **pricing**: Override default pricing (per 1M tokens)
-- **metrics**: Add/remove evaluation metrics
-- **generation**: Optional model generation settings (under `model.generation`) — supported: `temperature`, `top_p`, `max_tokens` (forwarded to the model client)
+# Combine with tag filtering
+uv run python scripts/run_benchmarks.py --tag qmsum --parallel-experiments
 
-Example:
+# Force serial execution (overrides config default)
+uv run python scripts/run_benchmarks.py --serial-experiments
+```
+
+### CLI flags reference
+
+| Flag | Description |
+|---|---|
+| `--experiment-id <id>` | Run only the specified experiment |
+| `--tag <tag>` | Run all experiments with the given tag |
+| `--parallel-experiments` | Run experiments concurrently (one thread per experiment) |
+| `--serial-experiments` | Run experiments one after another (default) |
+| `--dry-run` | Validate config without running anything |
+| `--verbose` | Enable debug logging |
+| `--config <path>` | Path to config YAML (default: `config/experiments.yaml`) |
+| `--mlflow` | Enable MLflow tracing (overrides config) |
+| `--no-mlflow` | Disable MLflow tracing (overrides config) |
+| `--mlflow-uri <uri>` | MLflow tracking URI (default: `http://localhost:5000`) |
+| `--langsmith` | Enable LangSmith tracing (overrides config) |
+| `--no-langsmith` | Disable LangSmith tracing (overrides config) |
+| `--langsmith-project <name>` | LangSmith project name (default: `scalebench`) |
+| `--upload-hf` | Upload results to HuggingFace after completion |
+| `--no-upload-hf` | Disable HF upload (overrides config) |
+| `--hf-token <token>` | HuggingFace token (falls back to `HF_TOKEN` env var) |
+
+---
+
+## Experiment Configuration
+
+Edit `config/experiments.yaml` to define experiments. Example:
+
 ```yaml
 - id: my_experiment
   model:
@@ -78,12 +147,12 @@ Example:
       output_per_1m_tokens: 10.00
     scaledown:
       rate: auto  # or 0.5 for 50% compression
-      compression_model: gemini:2.5-flash  # Optional: model for compression (see supported models below)
+      compression_model: gemini-2.5-flash  # Optional: model for compression
   dataset:
     name: hotpotqa
     split: validation
-    num_examples: 50  # omit or set to `null` to use the full split (all rows)
-    # Note: `seed` is only used when `num_examples` is provided and smaller than the dataset size.
+    num_examples: 50  # omit or set to null to use the full split
+    # Note: seed is only used when num_examples is smaller than the dataset size
   task:
     name: rag_qa
   metrics:
@@ -91,30 +160,27 @@ Example:
     - f1
 ```
 
-#### ScaleDown Compression Models
+### ScaleDown Compression Models
 
-When using `mode: scaledown`, ScaleDown uses a separate model for context compression. You can specify which model to use via `scaledown.compression_model`:
+When using `mode: scaledown`, ScaleDown uses a separate model for context compression. Specify via `scaledown.compression_model`:
 
-**Supported compression models**:
+**Supported compression models:**
 - **Gemini**: `gemini-2.5-flash` (default), `gemini-2.5-pro`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`
 - **OpenAI**: `gpt-4o`, `gpt-4o-mini`
 
-**Important**: The compression model is separate from the downstream generation model. For example, you can compress with `gemini-2.5-flash` and generate with `gpt-4.1`.
+The compression model is separate from the downstream generation model. For example, compress with `gemini-2.5-flash` and generate with `gpt-4.1`:
 
-If `compression_model` is not specified, it defaults to `gemini-2.5-flash` (fast, cost-effective, widely supported).
-
-**Example - compression with Gemini, generation with GPT:**
 ```yaml
 - id: hotpotqa_scaledown_gpt41
   model:
-    name: openai:gpt-4.1              # Downstream generation model (can be any supported model)
+    name: openai:gpt-4.1
     mode: scaledown
     scaledown:
       rate: auto
-      compression_model: gemini-2.5-flash  # Compression model (limited to supported models)
+      compression_model: gemini-2.5-flash
 ```
 
-#### Default Model Pricing
+### Default Model Pricing
 
 The framework includes default pricing (per 1M tokens) for common models:
 - **gpt-4o**: $2.50 input / $10.00 output
@@ -122,13 +188,13 @@ The framework includes default pricing (per 1M tokens) for common models:
 - **gpt-4.1**: $2.00 input / $8.00 output
 - **gpt-4.1-mini**: $0.40 input / $1.60 output
 - **gpt-5-mini**: $0.25 input / $2.00 output
-- **gpt-5.2**: $1.75 input / $14.00 output
-- **gpt-5.2-pro**: $21.00 input / $168.00 output
 - **gemini-2.5-flash**: $0.30 input / $2.50 output
 - **gemini-2.5-flash-lite**: $0.10 input / $0.40 output
 - **gemini-2.5-pro**: $1.25 input / $10.00 output
 
 To use custom pricing, add the `pricing` field to your model config as shown above.
+
+---
 
 ## Understanding Results
 
@@ -153,20 +219,15 @@ Each line contains:
 }
 ```
 
-**Note**: `input_context` will contain the **compressed context** when using ScaleDown mode, and the full context otherwise. `cost_usd` will be `null` if pricing is not configured for the model.
+`input_context` contains the **compressed context** in ScaleDown mode, or the full context in baseline mode. `cost_usd` is `null` if pricing is not configured.
 
 ### Summary Statistics (`results/summaries/`)
 
 Two files per experiment:
 
-**CSV** (`{experiment_id}_{timestamp}_summary.csv`):
-- Flat format for easy comparison
-- Columns: experiment_id, model, n_examples, exact_match_mean, f1_mean, avg_latency_ms, avg_input_tokens, avg_output_tokens, total_cost_usd, avg_cost_usd, cost_p95_usd, compression_ratio
+**CSV** (`{experiment_id}_{timestamp}_summary.csv`): flat format for easy comparison across runs.
 
-**JSON** (`{experiment_id}_{timestamp}_summary.json`):
-- Nested format with full statistics
-- Includes mean, std, min, max, p50, p95 for all metrics
-- Example:
+**JSON** (`{experiment_id}_{timestamp}_summary.json`): nested format with full statistics:
 ```json
 {
   "experiment_id": "hotpotqa_baseline_openai_20251211_150028",
@@ -188,30 +249,30 @@ Two files per experiment:
 }
 ```
 
-**Note**: The `cost` field will be omitted if pricing is not configured.
-
 ### Key Metrics Explained
 
 - **exact_match**: 1.0 if prediction exactly matches answer after normalization, else 0.0
-- **f1**: Token-level F1 score (0.0-1.0), measuring token overlap between prediction and answer
-- **avg_input_tokens**: Average input tokens sent to LLM (should be ~80-90% lower for ScaleDown)
+- **f1**: Token-level F1 score (0.0–1.0), measuring token overlap between prediction and answer
+- **avg_input_tokens**: Average input tokens sent to LLM (should be ~80–90% lower for ScaleDown)
 - **avg_output_tokens**: Average tokens in model responses
 - **avg_latency_ms**: Average end-to-end latency (includes compression time for ScaleDown)
-- **avg_cost_usd**: Average cost per example in USD (based on token usage and model pricing)
+- **avg_cost_usd**: Average cost per example in USD
 - **total_cost_usd**: Total cost for all examples in the experiment
-- **compression_ratio**: For ScaleDown only - compressed/original token ratio
+- **compression_ratio**: For ScaleDown only — compressed/original token ratio
 
 ### Comparing Baseline vs ScaleDown
 
 Look for:
-1. **Token reduction**: ScaleDown input tokens should be 80-90% lower
-2. **Accuracy preservation**: Exact match and F1 should be similar (±5-10%)
+1. **Token reduction**: ScaleDown input tokens should be 80–90% lower
+2. **Accuracy preservation**: Exact match and F1 should be similar (±5–10%)
 3. **Latency trade-off**: ScaleDown adds compression overhead but may reduce generation time
 4. **Cost savings**: ScaleDown should significantly reduce costs due to lower input token usage
 
+---
+
 ## LongBench Dataset
 
-LongBench is a benchmark for long-context evaluation with documents up to 40k+ tokens. This framework supports **4 English QA tasks** from LongBench:
+LongBench is a benchmark for long-context evaluation with documents up to 40k+ tokens. ScaleBench supports **4 English QA tasks**:
 
 - **narrativeqa**: Question answering over long narratives (stories, novels)
 - **qasper**: Question answering over scientific papers
@@ -219,8 +280,6 @@ LongBench is a benchmark for long-context evaluation with documents up to 40k+ t
 - **2wikimqa**: Multi-hop questions requiring information from multiple sources
 
 ### Single-Task Evaluation
-
-Evaluate a single LongBench task:
 
 ```yaml
 - id: longbench_narrativeqa_baseline_openai
@@ -262,34 +321,27 @@ Evaluate all 4 QA tasks in a single experiment by setting `task: null`:
     - bertscore
 ```
 
-**Multi-task results structure**:
+**Multi-task results structure:**
 - Separate raw JSONL files for each task: `{exp_id}_narrativeqa_{timestamp}.jsonl`, etc.
 - Summary CSV includes overall row + per-task breakdown
 - Summary JSON includes nested `per_task` structure with individual metrics
 
 ### BERTScore Metric
 
-BERTScore evaluates **semantic similarity** using contextual embeddings from BERT models, providing more nuanced evaluation than token-level metrics.
+BERTScore evaluates **semantic similarity** using contextual embeddings, providing more nuanced evaluation than token-level metrics.
 
-**Configuration**:
-```yaml
-metrics:
-  - f1           # Token-level F1
-  - bertscore    # Semantic similarity (precision, recall, F1)
-```
-
-**Returns three scores**:
+**Returns three scores:**
 - `bertscore_precision`: How much of the prediction is semantically relevant
 - `bertscore_recall`: How much of the reference is covered by the prediction
 - `bertscore_f1`: Harmonic mean of precision and recall
 
-**Model download**: On first use, BERTScore downloads `distilbert-base-uncased` (~268MB). This happens automatically and is cached for future runs.
+**Model download**: On first use, BERTScore downloads `distilbert-base-uncased` (~268MB), cached for future runs.
 
-**Note**: BERTScore is more robust to paraphrasing than exact match or token F1, making it ideal for long-context QA where answers may be expressed differently.
+---
 
 ## MLflow Integration
 
-Optional MLflow integration provides experiment tracking, tracing, and visibility into benchmark runs.
+Optional MLflow integration provides experiment tracking and tracing.
 
 ### Quick Start
 
@@ -297,16 +349,11 @@ Optional MLflow integration provides experiment tracking, tracing, and visibilit
    ```bash
    mlflow server --host 127.0.0.1 --port 5000 --allowed-hosts "*"
    ```
-   
-   **Note**: MLflow 3.5.0+ includes security middleware that validates Host headers. For local development, use `--allowed-hosts "*"` to allow all hosts. For production, specify exact hosts like `--allowed-hosts "mlflow.company.com,localhost"`.
+   > **Note**: MLflow 3.5.0+ validates Host headers. Use `--allowed-hosts "*"` for local development.
 
 2. **Run benchmarks with MLflow enabled**:
    ```bash
-   # Via CLI flag
-   python run_benchmarks.py --mlflow
-
-   # Or enable in config (mlflow.enabled: true)
-   python run_benchmarks.py
+   uv run python scripts/run_benchmarks.py --mlflow
    ```
 
 3. **View results** at http://127.0.0.1:5000
@@ -318,228 +365,190 @@ Enable via `config/experiments.yaml`:
 mlflow:
   enabled: true
   tracking_uri: "http://127.0.0.1:5000"
-  experiment_name: "ScaleDown"
+  experiment_name: "scalebench"
 ```
-
-Or via CLI flags:
-- `--mlflow` - Enable MLflow (overrides config)
-- `--no-mlflow` - Disable MLflow (overrides config)
-- `--mlflow-uri` - Custom tracking URI
 
 ### What Gets Logged
 
-**Traces:**
-- Per-example execution with full prompts/contexts
-- Auto-traced OpenAI and Gemini API calls
-- Manual span for ScaleDown compression (inputs, outputs, ratio)
-
-**Parameters:**
-- Experiment ID, dataset, model, mode
-- ScaleDown compression rate and model (if applicable)
-- Metrics being evaluated
-
-**Metrics:**
-- Aggregated F1, exact match, latency, token counts
-- Cost statistics (total and average)
-- Compression ratio (for ScaleDown mode)
-
-**Artifacts:**
-- Raw JSONL result files
-- Summary JSON/CSV files
-
-**Tags:**
-- Dataset name, mode (baseline/scaledown), model provider
-
-### MLflow UI Features
-
-- **Traces tab**: View per-example execution traces with full context
-- **Runs**: Compare experiments side-by-side
-- **Artifacts**: Download raw results directly
-- **Metrics**: Visualize performance across runs
+- **Traces**: Per-example execution with full prompts/contexts, auto-traced OpenAI and Gemini calls, ScaleDown compression spans
+- **Parameters**: Experiment ID, dataset, model, mode, compression rate
+- **Metrics**: Aggregated F1, exact match, latency, token counts, cost, compression ratio
+- **Artifacts**: Raw JSONL result files, summary JSON/CSV
 
 ### Troubleshooting MLflow
 
-**403 Error: "API request to endpoint ... failed with error code 403"**
-
-This is caused by MLflow's security middleware (added in v3.5.0+) that validates Host headers to prevent DNS rebinding attacks.
-
-**Solution**: Restart MLflow server with `--allowed-hosts` flag:
+**403 Error** — MLflow security middleware (added in v3.5.0+) is blocking the request. Restart with:
 ```bash
-# Allow all hosts (local development)
-mlflow server --host 127.0.0.1 --port 5000 --allowed-hosts "*"
-
-# Or be specific
-mlflow server --host 127.0.0.1 --port 5000 --allowed-hosts "localhost,127.0.0.1,localhost:5000,127.0.0.1:5000"
+mlflow server --host 127.0.0.1 --port 5000 --allowed-hosts "localhost,127.0.0.1"
 ```
 
-**404 Error: Experiment not found**
+**404 Error: Experiment not found** — The experiment name in your config doesn't exist yet; the code creates it automatically on first run.
 
-Make sure the experiment name in your config matches what you created in MLflow UI, or the code will create it automatically if it doesn't exist.
+---
 
-**Connection Error: Cannot reach MLflow server**
+## LangSmith Integration
 
-- Verify server is running: Check http://localhost:5000 in browser
-- Check port: Default is 5000, but can be customized with `--port`
-- Check tracking URI: Ensure config matches server address
+Optional LangSmith integration provides per-example tracing with full prompt visibility.
+
+### Quick Start
+
+1. **Get a LangSmith API key** at [smith.langchain.com](https://smith.langchain.com)
+2. **Add to `.env`**: `LANGSMITH_API_KEY=your_key`
+3. **Run with LangSmith enabled**:
+   ```bash
+   uv run python scripts/run_benchmarks.py --langsmith --langsmith-project MyProject
+   ```
+
+### What Gets Traced
+
+Each benchmark run produces a trace hierarchy:
+```
+experiment run
+  └─ example_<id>
+       ├─ llm_<model>          (raw model call with full prompts)
+       └─ feedback scores      (rouge1, f1, exact_match, etc.)
+```
+
+Per-example data captured: system/user prompts, context length, prediction, gold answer, token counts, latency, cost, metric scores.
+
+---
 
 ## Project Structure
 
 ```
+scalebench/
 ├── config/
 │   └── experiments.yaml        # Experiment configurations
-├── core/
-│   ├── config.py              # Config dataclasses and YAML parsing
-│   └── registry.py            # Component factories (models/datasets/tasks/metrics)
-├── dataset/
-│   ├── base.py                # Dataset ABC
-│   ├── hotpotqa.py            # HotpotQA loader
-│   ├── longbench.py           # LongBench loader (4 QA tasks)
-│   └── ethic.py               # ETHIC loader (3 list extraction subsets)
-├── tasks/
-│   ├── base.py                # Task ABC with normalization
-│   └── rag_task.py            # RAG QA task with prompt formatting
-├── models/
-│   ├── base.py                # ModelClient interface
-│   ├── openai_client.py       # OpenAI wrapper
-│   ├── gemini_client.py       # Gemini wrapper
-│   └── scaledown_client.py    # ScaleDown compression wrapper
-├── metrics/
-│   ├── classification.py      # Exact match and F1 metrics
-│   ├── generation.py          # BERTScore and generation metrics
-│   └── set_metrics.py         # Set-based metrics for list outputs
-├── evaluation/
-│   ├── runner.py              # Experiment execution engine
-│   └── aggregation.py         # Results statistics computation
-├── results/
-│   ├── raw/                   # Per-example JSONL logs
-│   └── summaries/             # Aggregated CSV/JSON summaries
-└── run_benchmarks.py          # CLI entrypoint
+├── scripts/
+│   └── run_benchmarks.py       # CLI entrypoint
+├── src/
+│   ├── core/
+│   │   ├── config.py           # Config dataclasses and YAML parsing
+│   │   └── registry.py         # Component factories (models/datasets/tasks/metrics)
+│   ├── dataset/
+│   │   ├── base.py             # Dataset ABC
+│   │   ├── hotpotqa.py         # HotpotQA loader
+│   │   ├── longbench.py        # LongBench loader (4 QA tasks)
+│   │   ├── ethic.py            # ETHIC loader (list extraction)
+│   │   ├── msmarco.py          # MS-MARCO v2.1 loader
+│   │   ├── financebench.py     # FinanceBench loader
+│   │   └── qmsum.py            # QMSum loader
+│   ├── tasks/
+│   │   ├── base.py             # Task ABC
+│   │   ├── rag_task.py         # RAG QA task
+│   │   ├── retrieval_task.py   # Retrieval task
+│   │   └── summarization_task.py # Summarization task
+│   ├── models/
+│   │   ├── base.py             # ModelClient interface
+│   │   ├── openai_client.py    # OpenAI wrapper
+│   │   ├── gemini_client.py    # Gemini wrapper
+│   │   ├── claude_client.py    # Claude wrapper
+│   │   ├── scaledown_client.py # ScaleDown compression wrapper
+│   │   └── scaledown_summarize_client.py # ScaleDown summarization client
+│   ├── metrics/
+│   │   ├── classification.py   # Exact match and F1
+│   │   ├── generation.py       # BERTScore
+│   │   ├── rouge_metrics.py    # ROUGE metrics
+│   │   ├── set_metrics.py      # Set-based metrics (list outputs)
+│   │   └── retrieval_metrics.py # Retrieval metrics
+│   ├── evaluation/
+│   │   ├── runner.py           # Experiment execution engine
+│   │   └── aggregation.py      # Results statistics computation
+│   ├── utils/
+│   │   ├── mlflow_utils.py     # MLflow integration
+│   │   ├── langsmith_utils.py  # LangSmith integration
+│   │   ├── parallel.py         # Concurrent API request processing
+│   │   └── cost.py             # Cost calculation
+│   ├── huggingface/
+│   │   └── uploader.py         # HuggingFace dataset upload
+│   ├── hf_space/
+│   │   └── app.py              # Gradio leaderboard UI
+│   ├── load_testing/           # Locust-based load testing
+│   ├── prompts/                # Prompt templates
+│   └── settings.py             # Environment configuration
+├── tests/                      # Test suite
+├── .env.example                # Environment variable template
+├── pyproject.toml
+└── requirements.txt
 ```
+
+---
 
 ## Extending the Framework
 
 ### Add a new dataset
-1. Create `dataset/my_dataset.py` implementing `Dataset` ABC (see `hotpotqa.py` or `longbench.py` as examples)
-2. Register in `core/registry.py`: `DATASET_REGISTRY["my_dataset"] = MyDataset`
-3. Add to `config/experiments.yaml`
+1. Create `src/dataset/my_dataset.py` implementing the `Dataset` ABC (see `hotpotqa.py` as an example)
+2. Register in `src/core/registry.py`: `DATASET_REGISTRY["my_dataset"] = MyDataset`
+3. Add experiments to `config/experiments.yaml`
 
 ### Add a new metric
-1. Create function in `metrics/` returning `{"metric_name": float}` (see `classification.py` or `generation.py` as examples)
-2. Register in `core/registry.py`: `METRIC_REGISTRY["my_metric"] = my_metric_fn`
-3. Add to experiment config metrics list
+1. Create a function in `src/metrics/` returning `{"metric_name": float}`
+2. Register in `src/core/registry.py`: `METRIC_REGISTRY["my_metric"] = my_metric_fn`
+3. Add to experiment config `metrics` list
 
 ### Add a new model
-1. Create client in `models/` implementing `ModelClient` interface
-2. Register in `core/registry.py`: `MODEL_REGISTRY["provider"] = MyClient`
-3. Use format `provider:model_name` in config
+1. Create a client in `src/models/` implementing the `ModelClient` interface
+2. Register in `src/core/registry.py`: `MODEL_REGISTRY["provider"] = MyClient`
+3. Use format `provider:model_name` in experiment config
+
+---
 
 ## Load Testing
 
-The framework includes a load testing module for evaluating ScaleDown's compression API performance under concurrent load.
+The framework includes a load testing module for evaluating ScaleDown's compression API under concurrent load.
 
 ### Quick Start
 
 ```bash
-# Configure test parameters
-vim load_testing/config.yaml
+# Run with web UI
+locust -f src/load_testing/locustfile.py
 
-# Run with web UI (interactive)
-locust -f load_testing/locustfile.py
-
-# Run headless (automated)
-locust -f load_testing/locustfile.py --headless --users=50 --spawn-rate=5 --run-time=5m
+# Run headless
+locust -f src/load_testing/locustfile.py --headless --users=50 --spawn-rate=5 --run-time=5m
 ```
 
 ### Features
 
-- **Realistic load testing**: Uses actual dataset examples (HotpotQA, etc.)
-- **Multiple compression configs**: Test different rates and models
-- **Custom metrics**: Track compression ratios, token savings, latency
-- **Thread-safe**: Handles concurrent requests safely
-- **Comprehensive outputs**: Locust built-ins + custom JSON/CSV exports
+- Realistic load testing using actual dataset examples (HotpotQA, etc.)
+- Multiple compression configs (different rates and models)
+- Custom metrics: compression ratios, token savings, latency
+- Comprehensive outputs: Locust built-ins + custom JSON/CSV exports
 
-### Test Scenarios
+**Web UI**: http://localhost:8089 (when running without `--headless`)
 
-**Steady load:**
-```bash
-locust -f load_testing/locustfile.py --users=50 --spawn-rate=5
-```
+See [load_testing/README.md](src/load_testing/README.md) for full documentation.
 
-**Ramp-up test:**
-```bash
-locust -f load_testing/locustfile.py --users=100 --spawn-rate=2 --run-time=10m
-```
-
-**Spike test:**
-```bash
-locust -f load_testing/locustfile.py --users=200 --spawn-rate=50 --run-time=5m
-```
-
-### Results Location
-
-- **Locust stats**: `--csv` and `--html` flags specify output location
-- **Custom metrics**: `load_testing/results/summaries/load_test_metrics_<timestamp>.{json,csv}`
-- **Web UI**: http://localhost:8089 (when running without `--headless`)
-
-**Full documentation:** See [load_testing/README.md](load_testing/README.md)
 ---
 
 ## HuggingFace Leaderboard Integration
 
-The framework includes full integration with HuggingFace for sharing and visualizing benchmark results.
+Upload and visualize benchmark results on HuggingFace.
 
-### Quick Start
+### Usage
 
 ```bash
-# View leaderboard
-https://huggingface.co/spaces/scaledown/compression-leaderboard
+# Upload results during a benchmark run
+uv run python scripts/run_benchmarks.py --upload-hf
+
+# Upload existing results
+python src/huggingface/upload_to_hf.py --all
+python src/huggingface/upload_to_hf.py --file results/summaries/*hotpotqa*.json
 ```
-
-### Features
-
-- **Automatic upload**: Run benchmarks with `--upload-hf` flag
-- **Dynamic metrics**: Supports any metrics (exact_match, f1, bertscore, custom)
-- **Comparison view**: Side-by-side baseline vs ScaleDown with cost savings
-- **Private or public**: Control visibility via HF permissions
 
 ### Architecture
 
 ```
 Local Benchmarks ──▶ HF Dataset ──▶ HF Space (Gradio UI)
-    └── huggingface/   └── Private     └── hf_space/
-        uploader.py        Storage          app.py
+    └── src/huggingface/   └── Private     └── src/hf_space/
+        uploader.py            Storage          app.py
 ```
 
-**Two components:**
-1. **`huggingface/`** - Local upload module (runs on your machine)
-2. **`hf_space/`** - Leaderboard UI (deployed to HuggingFace Space)
-
-### Usage Examples
-
-**Upload during benchmark:**
-```bash
-python run_benchmarks.py --config config/experiments.yaml --upload-hf
-```
-
-**Upload existing results:**
-```bash
-# All results
-python upload_to_hf.py --all
-
-# Specific results
-python upload_to_hf.py --file results/summaries/*hotpotqa*.json
-
-# Dry run
-python upload_to_hf.py --all --dry-run
-```
-
-**Config-driven upload:**
-```yaml
-# config/experiments.yaml
-upload_to_hf: true
-
-experiments:
-  - id: hotpotqa_baseline_openai
-    ...
-```
 ---
+
+## Contributing
+
+Contributions are welcome! Please open an issue or pull request. When adding a new dataset, model, or metric, follow the patterns in the existing implementations and add corresponding tests.
+
+## License
+
+[MIT](LICENSE) — © 2025 ScaleDown

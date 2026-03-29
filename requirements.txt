@@ -10,6 +10,9 @@ wikipedia==1.4.0
 datasets==4.4.1
 evaluate==0.4.6
 bert-score==0.3.13
+rouge-score==0.1.2
+nltk==3.9.1
+absl-py==2.2.2
 rich==14.2.0
 locust==2.42.6
 huggingface_hub==1.2.3
